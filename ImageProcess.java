@@ -29,8 +29,14 @@ public class ImageProcess {
             int[][] processedPixels = grayscale(pixels);
             double[][] sobelPixels = sobelKernel(processedPixels);
 
-            saveGrayMatrixToTextFile(processedPixels, "D:\\DSAA B\\DSAA B\\Project\\Image\\gray_matrix.txt");
-            saveSobelMatrixToTextFile(sobelPixels, "D:\\DSAA B\\DSAA B\\Project\\Image\\sobel_matrix.txt");
+            //saveGrayMatrixToTextFile(processedPixels, "D:\\DSAA B\\DSAA B\\Project\\Image\\gray_matrix.txt");
+            //saveSobelMatrixToTextFile(sobelPixels, "D:\\DSAA B\\DSAA B\\Project\\Image\\sobel_matrix.txt");
+
+            String sobelMatrixString = getSobelMatrixAsString(sobelPixels);
+            //测试，可删
+            System.out.println("Sobel矩阵:");
+            System.out.println(sobelMatrixString);
+
 
         } catch (IOException e) {
             System.out.println("Error reading or writing the image: " + e.getMessage());
@@ -117,7 +123,18 @@ public class ImageProcess {
         return result;
     }
 
-    //保存灰度矩阵
+    public static String getSobelMatrixAsString(double[][] matrix) {
+        StringBuilder sb = new StringBuilder();
+        for (double[] row : matrix) {
+            for (double value : row) {
+                sb.append(value).append(" ");
+            }
+            sb.append("\n");
+        }
+        return sb.toString();
+    }
+
+    //保存sobel矩阵
     public static void saveSobelMatrixToTextFile(double[][] matrix, String filePath) throws IOException {
         FileWriter writer = new FileWriter(filePath);
         for (double[] row : matrix) {
