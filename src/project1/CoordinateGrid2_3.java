@@ -68,7 +68,7 @@ public class CoordinateGrid2_3 {
 
 
     public static void main(String[] args) {
-        new CoordinateGrid2_3().run();
+        new CoordinateGrid2().run();
     }
 
     public void run() {
@@ -390,7 +390,7 @@ public class CoordinateGrid2_3 {
         if (!lines.isEmpty()) {
             glColor4f(LINE_COLOR[0], LINE_COLOR[1], LINE_COLOR[2], LINE_COLOR[3]);
             glBegin(GL_LINES);
-            for (CoordinateGrid2_3.Line line : lines) {
+            for (Line line : lines) {
                 glVertex2f(line.x1, line.y1);
                 glVertex2f(line.x2, line.y2);
             }
@@ -638,6 +638,7 @@ public class CoordinateGrid2_3 {
         }
     }
 
+
     private void scrollCallback(long window, double xoffset, double yoffset) {
         if (ctrlPressed) {
             float oldScale = scale;
@@ -706,7 +707,7 @@ public class CoordinateGrid2_3 {
         Objects.requireNonNull(glfwSetErrorCallback(null)).free();
     }
     // 内部类表示点和线
-    private static class Point {
+    public static class Point {
         float x, y;
 
         Point(float x, float y) {
@@ -742,6 +743,35 @@ public class CoordinateGrid2_3 {
         float y = (float) (Math.random() * imageHeight);
         points.add(new Point(x, y));
 
+    }
+
+    // 获取鼠标在坐标轴上的位置
+    public Point getPosition(){
+        float[] gridPos = screenToGridCoordinates((float)mouseX, (float)mouseY);
+        float mouseGridX = gridPos[0];
+        float mouseGridY = gridPos[1];
+        System.out.println(mouseGridX + " " + mouseGridY);
+        // 检查是否在坐标系范围内
+        if (mouseGridX >= 0 && mouseGridX <= gridWidth && mouseGridY >= 0 && mouseGridY <= gridHeight) {
+            // 计算网格步长（假设网格线间距为1个单位）
+            int gridStep = 1;
+
+            // 计算最近的网格点X坐标
+            float nearestX = Math.round(mouseGridX / gridStep) * gridStep;
+            nearestX = Math.max(0, Math.min(nearestX, gridWidth));
+
+            // 计算最近的网格点Y坐标
+            float nearestY = Math.round(mouseGridY / gridStep) * gridStep;
+            nearestY = Math.max(0, Math.min(nearestY, gridHeight));
+
+            return new Point(nearestX, nearestY);
+        }
+        return null;
+    }
+
+    // 更新绘制点与线
+    public void renewPoints(List<Point> points){
+        this.points = points;
     }
 
 
