@@ -7,6 +7,7 @@ import org.lwjgl.system.*;
 import java.nio.*;
 import java.util.*;
 
+import static java.lang.Math.pow;
 import static org.lwjgl.glfw.Callbacks.glfwFreeCallbacks;
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL11.*;
@@ -213,6 +214,7 @@ public class CoordinateGrid2_3 implements Runnable {
     }
 
     private void loop() {
+
         double lastTime = GLFW.glfwGetTime();
         double accumulator = 0.0;
 
@@ -220,6 +222,9 @@ public class CoordinateGrid2_3 implements Runnable {
 
         // 主循环
         while (!glfwWindowShouldClose(window)) {
+
+
+
             double currentTime = GLFW.glfwGetTime();
             double frameTime = currentTime - lastTime;
             lastTime = currentTime;
@@ -249,7 +254,7 @@ public class CoordinateGrid2_3 implements Runnable {
             while (accumulator >= UPDATE_RATE) {
                 accumulator -= UPDATE_RATE;
                 // calculation
-
+                System.out.println(windowHeight);
             }
 
             // 渲染(可以传入插值因子用于平滑渲染)
@@ -418,7 +423,7 @@ public class CoordinateGrid2_3 implements Runnable {
             glEnd(); }
 
         // 绘制反色圆圈
-        if (!points.isEmpty()) {
+        if (!seedPoints.isEmpty()) {
             // 1. 设置反色混合模式
             glEnable(GL_BLEND);
             glBlendFunc(GL_ONE_MINUS_DST_COLOR, GL_ZERO); // 反色混合公式
@@ -426,7 +431,7 @@ public class CoordinateGrid2_3 implements Runnable {
             // 2. 绘制圆圈
             float radius = gridWidth * scaleCircle / (scale * 30.0f);
             glColor3f(1, 1, 1); // 必须设置为白色
-            for (Point point : points) {
+            for (Point point : seedPoints) {
                 glBegin(GL_LINE_LOOP);
                 for (int i = 0; i < 32; i++) {
                     double angle = 2.0 * Math.PI * i / 32;
@@ -472,6 +477,15 @@ public class CoordinateGrid2_3 implements Runnable {
         glLineWidth(1);
     }
 
+    // 更新路径线条，便于draw
+    private void renewLine(){
+        this.lines.clear();
+        for(int i =0; i< points.size() - 1; i++){
+            Point p1 = points.get(i);
+            Point p2 = points.get(i+1);
+            this.lines.add(new Line(p1.x, p1.y, p2.x, p2.y));
+        }
+    }
     private void displayScale() {
         // 在窗口左下角显示缩放比例
         String scaleText = String.format("Scale: %.2f", scale);
@@ -613,23 +627,19 @@ public class CoordinateGrid2_3 implements Runnable {
                 if (action == GLFW_PRESS) {
                     // 实现标点
                     Point p = getPosition();
-
                     // 检查是否在坐标系范围内
                     if (p!=null) {
                         // 添加最近的网格点
                         seedPoints.add(p);
                         System.out.println(p.x + "N" + p.y);
-                        // 如果有多个点，添加线条
+                        // 如果有多个点，考虑闭合
                         if (points.size() > 1) {
-                            Point prevPoint = points.get(points.size() - 2);
-                            lines.add(new Line(prevPoint.x, prevPoint.y, p.x, p.y));
-
                             // 检查是否可以闭合
                             if (points.size() > 2 && !isClosed) {
                                 Point firstPoint = points.get(0);
                                 float distance = (float) Math.sqrt(
-                                        Math.pow(p.x - firstPoint.x, 2) +
-                                                Math.pow(p.y - firstPoint.y, 2)
+                                        pow(p.x - firstPoint.x, 2) +
+                                                pow(p.y - firstPoint.y, 2)
                                 );
 
                                 // 闭合阈值设为网格步长的1.5倍
@@ -647,7 +657,14 @@ public class CoordinateGrid2_3 implements Runnable {
             if(!handMode){
                 if(action == GLFW_PRESS){
                     Point p = getPosition();
-                    // return to find seed points
+                    // 找到最新的seedpoint，然后判断点击范围是否接近
+                    Point prePoint = seedPoints.getLast();
+                    int distance = (int)Math.sqrt(pow(prePoint.x - p.x,2)+pow(prePoint.y - p.y,2));
+                    float optDist = distance / scale; // 考虑缩放时点击的准确性会下降
+                    System.out.println("距离最近seedpoint：" + optDist);
+                    if(optDist< 10){
+                        seedPoints.removeLast();
+                    }
                 }
             }
         }
