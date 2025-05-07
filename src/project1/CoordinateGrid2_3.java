@@ -18,7 +18,7 @@ import static org.lwjgl.stb.STBEasyFont.*;
 import static org.lwjgl.system.MemoryStack.*;
 import static org.lwjgl.system.MemoryUtil.*;
 
-public class CoordinateGrid2_3 {
+public class CoordinateGrid2_3 implements Runnable {
     // 状态变量
     private boolean handMode = false;
     private boolean isDragging = false;
@@ -26,6 +26,7 @@ public class CoordinateGrid2_3 {
     // 窗口和坐标系相关变量
     private long window;
     private int windowWidth, windowHeight;
+    private final int gridStep = 1;
 
     // 这里需要以图片像素为准修改宽度。而且格子数为下面的width/gap。
     private int gridWidth = 10; // 默认网格宽度
@@ -47,6 +48,7 @@ public class CoordinateGrid2_3 {
     // 绘制的点和线
     private List<Point> points = new ArrayList<>();
     private List<Line> lines = new ArrayList<>();
+    private List<Point> seedPoints = new ArrayList<>();
     private boolean isClosed = false;
     private float scaleCircle = 1.0f;
     // 字体渲染相关
@@ -66,9 +68,13 @@ public class CoordinateGrid2_3 {
     private long arrowCursor = 0;
     private boolean cursorsInitialized = false;
 
+    // 时间更新
+    private final double UPDATE_RATE = 1.0 / 30.0;
+    private final double MAX_FRAME_TIME = 0.25;
+
 
     public static void main(String[] args) {
-        new CoordinateGrid2().run();
+        new CoordinateGrid2_3().run();
     }
 
     public void run() {
@@ -207,10 +213,23 @@ public class CoordinateGrid2_3 {
     }
 
     private void loop() {
+        double lastTime = GLFW.glfwGetTime();
+        double accumulator = 0.0;
+
         glClearColor(1.0f, 1.0f, 1.0f, 0.0f);
 
         // 主循环
         while (!glfwWindowShouldClose(window)) {
+            double currentTime = GLFW.glfwGetTime();
+            double frameTime = currentTime - lastTime;
+            lastTime = currentTime;
+
+            if (frameTime > MAX_FRAME_TIME) {
+                frameTime = MAX_FRAME_TIME;
+            }
+
+            accumulator += frameTime;
+
             // 清空屏幕
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -226,13 +245,15 @@ public class CoordinateGrid2_3 {
             glMatrixMode(GL_MODELVIEW);
             glLoadIdentity();
 
-            // test of capability
-//            renderFrame(true);
+            // 执行固定时间步长更新
+            while (accumulator >= UPDATE_RATE) {
+                accumulator -= UPDATE_RATE;
+                // calculation
 
+            }
+
+            // 渲染(可以传入插值因子用于平滑渲染)
             drawAll();
-
-            // 显示缩放比例
-//            displayScale();
 
             // 交换缓冲区
             glfwSwapBuffers(window);
@@ -591,43 +612,29 @@ public class CoordinateGrid2_3 {
             }else{
                 if (action == GLFW_PRESS) {
                     // 实现标点
-                    // 获取鼠标在坐标系中的位置
-                    float[] gridPos = screenToGridCoordinates((float)mouseX, (float)mouseY);
-                    float mouseGridX = gridPos[0];
-                    float mouseGridY = gridPos[1];
-                    System.out.println(mouseGridX + " " + mouseGridY);
+                    Point p = getPosition();
+
                     // 检查是否在坐标系范围内
-                    if (mouseGridX >= 0 && mouseGridX <= gridWidth && mouseGridY >= 0 && mouseGridY <= gridHeight) {
-                        // 计算网格步长（假设网格线间距为1个单位）
-                        int gridStep = 1;
-
-                        // 计算最近的网格点X坐标
-                        float nearestX = Math.round(mouseGridX / gridStep) * gridStep;
-                        nearestX = Math.max(0, Math.min(nearestX, gridWidth));
-
-                        // 计算最近的网格点Y坐标
-                        float nearestY = Math.round(mouseGridY / gridStep) * gridStep;
-                        nearestY = Math.max(0, Math.min(nearestY, gridHeight));
-
+                    if (p!=null) {
                         // 添加最近的网格点
-                        points.add(new Point(nearestX, nearestY));
-                        System.out.println(nearestX + "N" + nearestY);
+                        seedPoints.add(p);
+                        System.out.println(p.x + "N" + p.y);
                         // 如果有多个点，添加线条
                         if (points.size() > 1) {
                             Point prevPoint = points.get(points.size() - 2);
-                            lines.add(new Line(prevPoint.x, prevPoint.y, nearestX, nearestY));
+                            lines.add(new Line(prevPoint.x, prevPoint.y, p.x, p.y));
 
                             // 检查是否可以闭合
                             if (points.size() > 2 && !isClosed) {
                                 Point firstPoint = points.get(0);
                                 float distance = (float) Math.sqrt(
-                                        Math.pow(nearestX - firstPoint.x, 2) +
-                                                Math.pow(nearestY - firstPoint.y, 2)
+                                        Math.pow(p.x - firstPoint.x, 2) +
+                                                Math.pow(p.y - firstPoint.y, 2)
                                 );
 
                                 // 闭合阈值设为网格步长的1.5倍
                                 if (distance < gridStep * 1.5f) {
-                                    lines.add(new Line(nearestX, nearestY, firstPoint.x, firstPoint.y));
+                                    lines.add(new Line(p.x, p.y, firstPoint.x, firstPoint.y));
                                     isClosed = true;
                                 }
                             }
@@ -636,8 +643,15 @@ public class CoordinateGrid2_3 {
                 }
             }
         }
+        else if(GLFW_MOUSE_BUTTON_RIGHT == button){
+            if(!handMode){
+                if(action == GLFW_PRESS){
+                    Point p = getPosition();
+                    // return to find seed points
+                }
+            }
+        }
     }
-
 
     private void scrollCallback(long window, double xoffset, double yoffset) {
         if (ctrlPressed) {
@@ -727,6 +741,8 @@ public class CoordinateGrid2_3 {
         }
     }
 
+
+    // 性能测试
     long lastPointTime;
     int POINTS_PER_SEC = 5;
     private void renderFrame(boolean collectStats) {
@@ -753,8 +769,7 @@ public class CoordinateGrid2_3 {
         System.out.println(mouseGridX + " " + mouseGridY);
         // 检查是否在坐标系范围内
         if (mouseGridX >= 0 && mouseGridX <= gridWidth && mouseGridY >= 0 && mouseGridY <= gridHeight) {
-            // 计算网格步长（假设网格线间距为1个单位）
-            int gridStep = 1;
+            // （假设网格线间距为1个单位）
 
             // 计算最近的网格点X坐标
             float nearestX = Math.round(mouseGridX / gridStep) * gridStep;
