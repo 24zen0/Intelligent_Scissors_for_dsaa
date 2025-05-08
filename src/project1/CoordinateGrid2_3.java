@@ -119,7 +119,7 @@ public class CoordinateGrid2_3 implements Runnable {
         glfwSetCursorPosCallback(window, (window, xpos, ypos) -> cursorPosCallback(window, xpos, ypos));
         glfwSetMouseButtonCallback(window, (window, button, action, mods) -> mouseButtonCallback(window, button, action, mods));
         glfwSetScrollCallback(window, (window, xoffset, yoffset) -> scrollCallback(window, xoffset, yoffset));
-        glfwSetWindowSizeCallback(window, (win, width, height) -> windowSizeCallback(win, width, height));
+        glfwSetFramebufferSizeCallback(window, (win, width, height) -> framebufferSizeCallback(win, width, height));
 
         // 获取线程栈并推入一个新的栈帧
         try (MemoryStack stack = stackPush()) {
@@ -636,20 +636,20 @@ public class CoordinateGrid2_3 implements Runnable {
                         System.out.println(p.x + "N" + p.y);
                         // 如果有多个点，考虑闭合
                         // 检查是否可以闭合
-                        if (points.size() > 2 && !isClosed) {
-                            Point firstPoint = points.get(0);
+                        if (seedPoints.size() > 2 && !isClosed) {
+                            Point firstPoint = seedPoints.get(0);
                             float distance = (float) Math.sqrt(
                                     pow(p.x - firstPoint.x, 2) +
                                             pow(p.y - firstPoint.y, 2)
                             );
-
                             // 闭合阈值设为网格步长的1.5倍
                             if (distance < gridStep * 1.5f) {
                                 lines.add(new Line(p.x, p.y, firstPoint.x, firstPoint.y));
                                 isClosed = true;
                             }
+                            // 计算最后一点到第一点的路径，添加到points里面
+                            //? Dijkstra.findPath((int)p.x, (int)p.y, (int)firstPoint.x, (int)firstPoint.y);
                         }
-
                     }
                 }
             }
@@ -724,8 +724,8 @@ public class CoordinateGrid2_3 implements Runnable {
         };
     }
 
-    private void windowSizeCallback(long window, double xoffset, double yoffset) {
-        System.out.println("win: "+ xoffset + "," + yoffset);
+    private void framebufferSizeCallback(long window, double xoffset, double yoffset) {
+        System.out.println("frame: "+ xoffset + "," + yoffset);
         windowWidth = (int) xoffset;
         windowHeight = (int) yoffset;
     }
