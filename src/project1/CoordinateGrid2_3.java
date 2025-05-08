@@ -119,6 +119,7 @@ public class CoordinateGrid2_3 implements Runnable {
         glfwSetCursorPosCallback(window, (window, xpos, ypos) -> cursorPosCallback(window, xpos, ypos));
         glfwSetMouseButtonCallback(window, (window, button, action, mods) -> mouseButtonCallback(window, button, action, mods));
         glfwSetScrollCallback(window, (window, xoffset, yoffset) -> scrollCallback(window, xoffset, yoffset));
+        glfwSetWindowSizeCallback(window, (win, width, height) -> windowSizeCallback(win, width, height));
 
         // 获取线程栈并推入一个新的栈帧
         try (MemoryStack stack = stackPush()) {
@@ -198,18 +199,18 @@ public class CoordinateGrid2_3 implements Runnable {
         glDeleteShader(vertexShader);
         glDeleteShader(fragmentShader);
 
-        // 创建VAO和VBO
-        fontVAO = glGenVertexArrays();
-        fontVBO = glGenBuffers();
-
-        glBindVertexArray(fontVAO);
-        glBindBuffer(GL_ARRAY_BUFFER, fontVBO);
-
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 2, GL_FLOAT, false, 0, 0L);
-
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindVertexArray(0);
+//        // 创建VAO和VBO
+//        fontVAO = glGenVertexArrays();
+//        fontVBO = glGenBuffers();
+//
+//        glBindVertexArray(fontVAO);
+//        glBindBuffer(GL_ARRAY_BUFFER, fontVBO);
+//
+//        glEnableVertexAttribArray(0);
+//        glVertexAttribPointer(0, 2, GL_FLOAT, false, 0, 0L);
+//
+//        glBindBuffer(GL_ARRAY_BUFFER, 0);
+//        glBindVertexArray(0);
 
     }
 
@@ -255,6 +256,7 @@ public class CoordinateGrid2_3 implements Runnable {
                 accumulator -= UPDATE_RATE;
                 // calculation
                 System.out.println(windowHeight);
+
             }
 
             // 渲染(可以传入插值因子用于平滑渲染)
@@ -722,6 +724,13 @@ public class CoordinateGrid2_3 implements Runnable {
                 Math.max(0, Math.min(gridHeight, gridY))
         };
     }
+
+    private void windowSizeCallback(long window, double xoffset, double yoffset) {
+        System.out.println("win: "+ xoffset + "," + yoffset);
+        windowWidth = (int) xoffset;
+        windowHeight = (int) yoffset;
+    }
+
 
     private void cleanup() {
         if (cursorsInitialized) {
