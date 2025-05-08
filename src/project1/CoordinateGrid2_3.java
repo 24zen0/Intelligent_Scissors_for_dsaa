@@ -119,7 +119,7 @@ public class CoordinateGrid2_3 implements Runnable {
         glfwSetCursorPosCallback(window, (window, xpos, ypos) -> cursorPosCallback(window, xpos, ypos));
         glfwSetMouseButtonCallback(window, (window, button, action, mods) -> mouseButtonCallback(window, button, action, mods));
         glfwSetScrollCallback(window, (window, xoffset, yoffset) -> scrollCallback(window, xoffset, yoffset));
-        glfwSetWindowSizeCallback(window, (win, width, height) -> windowSizeCallback(win, width, height));
+        glfwSetFramebufferSizeCallback(window, (win, width, height) -> framebufferSizeCallback(win, width, height));
 
         // 获取线程栈并推入一个新的栈帧
         try (MemoryStack stack = stackPush()) {
@@ -724,8 +724,8 @@ public class CoordinateGrid2_3 implements Runnable {
         };
     }
 
-    private void windowSizeCallback(long window, double xoffset, double yoffset) {
-        System.out.println("win: "+ xoffset + "," + yoffset);
+    private void framebufferSizeCallback(long window, double xoffset, double yoffset) {
+        System.out.println("frame: "+ xoffset + "," + yoffset);
         windowWidth = (int) xoffset;
         windowHeight = (int) yoffset;
     }
