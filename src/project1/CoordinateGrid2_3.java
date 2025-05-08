@@ -562,7 +562,7 @@ public class CoordinateGrid2_3 implements Runnable {
         // 加载图片
         if (key == GLFW_KEY_L && action == GLFW_PRESS) {
 //            loadImage("src/example.png");
-            loadImage("src/example.jpg");
+            loadImage("src/img2.png");
 
         }
 
