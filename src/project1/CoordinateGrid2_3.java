@@ -11,6 +11,7 @@ import static java.lang.Math.pow;
 import static org.lwjgl.glfw.Callbacks.glfwFreeCallbacks;
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL11.*;
+import static org.lwjgl.opengl.GL12.GL_CLAMP_TO_EDGE;
 import static org.lwjgl.opengl.GL15.*;
 import static org.lwjgl.opengl.GL20.*;
 import static org.lwjgl.opengl.GL30.*;
@@ -77,6 +78,10 @@ public class CoordinateGrid2_3 implements Runnable {
     // 时间控制
     private final double UPDATE_RATE = 1.0 / 30.0; // 更新频率(30FPS)
     private final double MAX_FRAME_TIME = 0.25; // 最大帧时间
+
+    // 在CoordinateGrid2_3中添加
+    private List<Point> currentLivePath = new ArrayList<>();  // 实时路径缓存
+    private Deque<List<Point>> confirmedPathHistory = new ArrayDeque<>(100);  // 确认路径历史
 
     public static void main(String[] args) {
         new CoordinateGrid2_3().run();
@@ -244,6 +249,7 @@ public class CoordinateGrid2_3 implements Runnable {
             while (accumulator >= UPDATE_RATE) {
                 accumulator -= UPDATE_RATE;
                 // 这里可以添加固定时间步长的逻辑更新
+
             }
 
             // 渲染场景
@@ -389,8 +395,8 @@ public class CoordinateGrid2_3 implements Runnable {
                 for (int i = 0; i < 32; i++) {
                     double angle = 2.0 * Math.PI * i / 32;
                     glVertex2f(
-                            point.x + (float)(radius * Math.cos(angle)),
-                            point.y + (float)(radius * Math.sin(angle))
+                            (float) (point.x + (float)(radius * Math.cos(angle))),
+                            (float) (point.y + (float)(radius * Math.sin(angle)))
                     );
                 }
                 glEnd();
@@ -443,7 +449,7 @@ public class CoordinateGrid2_3 implements Runnable {
         for(int i =0; i< points.size() - 1; i++){
             Point p1 = points.get(i);
             Point p2 = points.get(i+1);
-            this.lines.add(new Line(p1.x, p1.y, p2.x, p2.y));
+            this.lines.add(new Line((float) p1.x, (float) p1.y, (float) p2.x, (float) p2.y));
         }
     }
 
@@ -535,6 +541,10 @@ public class CoordinateGrid2_3 implements Runnable {
         if (key == GLFW_KEY_G && action == GLFW_PRESS) {
             GridMode = !GridMode;
         }
+        if (key == GLFW_KEY_P && action == GLFW_PRESS) {
+            calculatePath();
+        }
+
     }
 
     /**
@@ -566,6 +576,11 @@ public class CoordinateGrid2_3 implements Runnable {
             lastMouseY = ypos;
         }
     }
+// 返回当前鼠标位置（实时）
+public Point getCurrentMousePosition() {
+    return new Point(mouseX, mouseY);
+}
+
 
     /**
      * 鼠标按钮回调函数
@@ -598,7 +613,7 @@ public class CoordinateGrid2_3 implements Runnable {
                             );
                             // 如果距离足够近则闭合路径
                             if (distance < gridStep * 1.5f) {
-                                lines.add(new Line(p.x, p.y, firstPoint.x, firstPoint.y));
+                                lines.add(new Line((float) p.x, (float) p.y, (float) firstPoint.x, (float) firstPoint.y));
                                 isClosed = true;
                             }
                         }
@@ -717,9 +732,9 @@ public class CoordinateGrid2_3 implements Runnable {
      * 表示2D点的内部类
      */
     public static class Point {
-        float x, y;
+        public final double x, y;
 
-        Point(float x, float y) {
+        public Point(double x, double y) {
             this.x = x;
             this.y = y;
         }
@@ -742,7 +757,7 @@ public class CoordinateGrid2_3 implements Runnable {
     // ================== 辅助方法 ==================
 
     /**
-     * 获取鼠标在网格上的对齐位置
+     * 获取鼠标点击点在网格上的对齐位置
      */
     public Point getPosition(){
         float[] gridPos = screenToGridCoordinates((float)mouseX, (float)mouseY);
@@ -771,4 +786,54 @@ public class CoordinateGrid2_3 implements Runnable {
     public void renewPoints(List<Point> points){
         this.points = points;
     }
+    //for A*
+    private void calculatePath() {
+        if (ImageProcess.costMatrix == null) {
+            System.out.println("Cost matrix not initialized. Process image first.");
+            return;
+        }
+
+        Point startPoint = getPosition();
+        Point endPoint = getCurrentMousePosition();
+        if (startPoint == null || endPoint == null) return;
+
+        // 转换终点到网格坐标
+        float[] endGrid = screenToGridCoordinates((float)endPoint.x, (float)endPoint.y);
+        int startX = (int)startPoint.x;
+        int startY = (int)startPoint.y;
+        int endX = (int)Math.round(endGrid[0]);
+        int endY = (int)Math.round(endGrid[1]);
+
+        // 调整y轴方向
+        int matrixHeight = ImageProcess.costMatrix.length;
+        int matrixStartY = matrixHeight - 1 - startY;
+        int matrixEndY = matrixHeight - 1 - endY;
+
+        // 检查边界
+        if (startX <0 || startX >= ImageProcess.costMatrix[0].length || matrixStartY <0 || matrixStartY >= matrixHeight ||
+                endX <0 || endX >= ImageProcess.costMatrix[0].length || matrixEndY <0 || matrixEndY >= matrixHeight) {
+            System.out.println("Invalid start/end coordinates");
+            return;
+        }
+
+        // 获取路径
+        List<AStar.Node> path = AStar.findPath(startX, matrixStartY, endX, matrixEndY, ImageProcess.costMatrix);
+
+        // 转换路径坐标回图形界面
+        seedPoints.clear();
+        for (AStar.Node node : path) {
+            int guiY = matrixHeight - 1 - node.y;
+            seedPoints.add(new Point(node.x, guiY));
+        }
+        renewLine();
+    }
+
+    // 在键盘回调中触发路径计算（例如绑定到P键）
+    private void keyCallbackA(long window, int key, int scancode, int action, int mods) {
+        // 原有其他按键处理...
+        if (key == GLFW_KEY_P && action == GLFW_PRESS) {
+            calculatePath();
+        }
+    }
 }
+
