@@ -1,119 +1,82 @@
 package project1;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 public class Dijkstra {
-    // 静态成员共享图像数据
-    private static double[][] sobelMatrix;
-    private static int width, height;
-    private static Dijkstra[][] nodeGrid; // 节点网格
+    private double[] dist;
+    private int[] parent;
+    private boolean[] visited;
+    private final double[][] costMatrix;
+    private final int start;
+    private final int end;
 
-    // 节点属性
-    public int x, y;
-    public double distance;
-    public Dijkstra predecessor;
-    public boolean visited;
-
-    // 初始化网格和Sobel数据
-    public static void initialize(double[][] sobel, int w, int h) {
-        sobelMatrix = sobel;
-        width = w;
-        height = h;
-        nodeGrid = new Dijkstra[h][w];
-
-        // 创建所有节点
-        for (int y = 0; y < h; y++) {
-            for (int x = 0; x < w; x++) {
-                Dijkstra node = new Dijkstra();
-                node.x = x;
-                node.y = y;
-                node.distance = Double.POSITIVE_INFINITY;
-                node.visited = false;
-                nodeGrid[y][x] = node;
-            }
-        }
+    public Dijkstra( int start, int end) {
+        this.costMatrix = ImageProcess.costMatrix;
+        this.start = start;
+        this.end = end;
+        initialize();
+        execute();
     }
 
-    // 根据坐标获取节点
-    public static Dijkstra getNode(int x, int y) {
-        if (x >= 0 && x < width && y >= 0 && y < height) {
-            return nodeGrid[y][x];
+    private void initialize() {
+        int vexNum = costMatrix.length;
+        dist = new double[vexNum];
+        parent = new int[vexNum];
+        visited = new boolean[vexNum];
+
+        for (int i = 0; i < vexNum; i++) {
+            dist[i] = Integer.MAX_VALUE;
+            parent[i] = -1;
         }
-        return null;
+        dist[start] = 0;
     }
 
-    // 计算从起点到终点的最短路径
-    public static List<Dijkstra> findPath(int startX, int startY, int endX, int endY) {
-        Dijkstra start = getNode(startX, startY);
-        Dijkstra end = getNode(endX, endY);
-        if (start == null || end == null) return Collections.emptyList();
+    private void execute() {
+        int vexNum = costMatrix.length;
+        for (int i = 0; i < vexNum; i++) {
+            int u = minDistance();
+            if (u == -1 || u == end) break; // 提前终止条件
 
-        resetNodes(); // 重置所有节点状态
-        PriorityQueue<Dijkstra> queue = new PriorityQueue<>(Comparator.comparingDouble(n -> n.distance));
-        start.distance = 0;
-        queue.add(start);
+            visited[u] = true;
+            for (int v = 0; v < vexNum; v++) {
+                if (costMatrix[u][v] != 0 &&
+                        dist[u] != Integer.MAX_VALUE &&
+                        !visited[v] &&
+                        dist[u] + costMatrix[u][v] < dist[v]) {
 
-        while (!queue.isEmpty()) {
-            Dijkstra current = queue.poll();
-            if (current.visited) continue;
-            if (current == end) break; // 提前终止
-
-            current.visited = true;
-            for (Dijkstra neighbor : getNeighbors(current)) {
-                double cost = getCost(current, neighbor);
-                double newDist = current.distance + cost;
-
-                if (newDist < neighbor.distance) {
-                    neighbor.distance = newDist;
-                    neighbor.predecessor = current;
-                    if (!queue.contains(neighbor)) {
-                        queue.add(neighbor);
-                    }
+                    dist[v] = dist[u] + costMatrix[u][v];
+                    parent[v] = u;
                 }
             }
         }
-
-        return buildPath(end); // 回溯路径
     }
 
-    // 获取邻居节点（8邻域）
-    private static List<Dijkstra> getNeighbors(Dijkstra node) {
-        int[][] dirs = {{-1,-1}, {-1,0}, {-1,1}, {0,-1}, {0,1}, {1,-1}, {1,0}, {1,1}};
-        List<Dijkstra> neighbors = new ArrayList<>();
-        for (int[] d : dirs) {
-            Dijkstra n = getNode(node.x + d[0], node.y + d[1]);
-            if (n != null) neighbors.add(n);
+    private int minDistance() {
+        double min = Integer.MAX_VALUE;
+        int minIndex = -1;
+        for (int v = 0; v < costMatrix.length; v++) {
+            if (!visited[v] && dist[v] <= min) {
+                min = dist[v];
+                minIndex = v;
+            }
         }
-        return neighbors;
+        return minIndex;
     }
 
-    // 计算移动成本（结合Sobel边缘强度）
-    private static double getCost(Dijkstra from, Dijkstra to) {
-        // 对角线移动成本为√2，否则为1
-        double distCost = (Math.abs(from.x - to.x) + Math.abs(from.y - to.y)) == 2
-                ? Math.sqrt(2) : 1.0;
-        // 使用目标像素的Sobel值作为权重（边缘越强，成本越高）
-        return distCost * (1.0 + sobelMatrix[to.y][to.x]);
-    }
+    public List<Integer> getShortestPath() {
+        List<Integer> path = new ArrayList<>();
+        if (dist[end] == Integer.MAX_VALUE) return path;
 
-    // 回溯路径
-    private static List<Dijkstra> buildPath(Dijkstra end) {
-        LinkedList<Dijkstra> path = new LinkedList<>();
-        while (end != null) {
-            path.addFirst(end);
-            end = end.predecessor;
+        for (int v = end; v != -1; v = parent[v]) {
+            path.add(v);
         }
+        Collections.reverse(path);
         return path;
     }
 
-    // 重置所有节点状态
-    private static void resetNodes() {
-        for (Dijkstra[] row : nodeGrid) {
-            for (Dijkstra node : row) {
-                node.distance = Double.POSITIVE_INFINITY;
-                node.visited = false;
-                node.predecessor = null;
-            }
-        }
+    public double getShortestDistance() {
+        return dist[end];
     }
 }

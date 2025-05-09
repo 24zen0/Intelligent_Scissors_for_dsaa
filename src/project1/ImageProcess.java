@@ -10,7 +10,7 @@ import java.io.IOException;
 public class ImageProcess {
 
     // 静态全局缓存 cost 矩阵
-    private static double[][] costMatrix;
+    static double[][] costMatrix;
 
     // 主流程方法：读取图像并生成 cost 矩阵
     public static void processImageToSobel(String imagePath) throws IOException {
@@ -42,7 +42,7 @@ public class ImageProcess {
     }
 
     // Cost 函数直接访问缓存
-    public static double costFunction(int x, int y) {
+    public static double getCostMatrix(int x, int y) {
         // 边界或未初始化时返回 1.0
         if (costMatrix == null || x < 0 || x >= costMatrix[0].length || y < 0 || y >= costMatrix.length) {
             return 1.0;
