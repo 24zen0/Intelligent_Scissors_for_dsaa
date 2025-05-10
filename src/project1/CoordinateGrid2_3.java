@@ -4,6 +4,7 @@ import org.lwjgl.glfw.*;
 import org.lwjgl.opengl.*;
 import org.lwjgl.system.*;
 
+import java.io.IOException;
 import java.nio.*;
 import java.util.*;
 
@@ -52,8 +53,8 @@ public class CoordinateGrid2_3 implements Runnable {
     private static final float DRAG_SENSITIVITY = 1.0f; // 拖动灵敏度
 
     // 绘制的几何元素
-    //private List<Point> points = new ArrayList<>(); // 点集合
-    private List<List<Point>> pointListList = new ArrayList<>();
+    private List<Point> pointsList = new ArrayList<>(); // 点集合
+    private List<List<Point>> pointListList = new ArrayList< >();
     private List<Line> lines = new ArrayList<>(); // 线集合
     private List<Point> seedPoints = new ArrayList<>(); // 种子点(用于路径)
     private boolean isClosed = false; // 路径是否闭合
@@ -84,6 +85,11 @@ public class CoordinateGrid2_3 implements Runnable {
     private List<Point> currentLivePath = new ArrayList<>();  // 实时路径缓存
     private Deque<List<Point>> confirmedPathHistory = new ArrayDeque<>(100);  // 确认路径历史
 
+
+    //for A*
+    private boolean isPathCalculating = false; // 是否正在实时计算路径
+    private Point pathStartPoint = null;       // 路径起点
+    private Point currentEnd = null; //路径终点
     public static void main(String[] args) {
         new CoordinateGrid2_3().run();
     }
@@ -246,14 +252,17 @@ public class CoordinateGrid2_3 implements Runnable {
             glMatrixMode(GL_MODELVIEW);
             glLoadIdentity();
 
-            // 固定时间步长更新
-            while (accumulator >= UPDATE_RATE) {
-                accumulator -= UPDATE_RATE;
-                // 这里可以添加固定时间步长的逻辑更新
-            //AStar.findPath((int) seedPoints.getLast().x,(int)seedPoints.getLast().y,(int)getPosition().x,(int)getPosition().y,ImageProcess.costMatrix);
-                addnewPoints(AStar.findPath((int) seedPoints.getLast().x,(int)seedPoints.getLast().y,(int)getPosition().x,(int)getPosition().y,ImageProcess.costMatrix));
-
+            // Check if seedPoints has elements and getPosition() is valid
+            if (!seedPoints.isEmpty() && getPosition() != null) {
+                Point start = seedPoints.getLast();
+                Point end = getPosition();
+                pointsList = AStar.Node.convertNodesToPoints(
+                        AStar.findPath((int)start.x, (int)start.y, (int)end.x, (int)end.y, ImageProcess.costMatrix)
+                );
+            } else {
+                pointsList = Collections.emptyList(); // Handle empty case
             }
+            addnewPoints(pointsList);
 
             // 渲染场景
             drawAll();
@@ -552,7 +561,7 @@ public class CoordinateGrid2_3 implements Runnable {
             GridMode = !GridMode;
         }
 
-        //enter直接闭合
+        //enter直接闭合，扣图
         if(key == GLFW_KEY_ENTER){
             int size = 0;
             for(int i =0;i<pointListList.size();i++){
@@ -580,14 +589,12 @@ public class CoordinateGrid2_3 implements Runnable {
         }
 
         if (key == GLFW_KEY_P && action == GLFW_PRESS) {
-            calculatePath();
+//            calculatePath();
         }
 
     }
 
-    /**
-     * 鼠标移动回调函数
-     */
+//实时模式下触发路径，有待确认，似乎没有用上检测四周范围然后确定grid
     private void currentMousePosCallback(long window, double xpos, double ypos) {
         // 更新鼠标位置
         currentMouseX = xpos;
@@ -613,6 +620,15 @@ public class CoordinateGrid2_3 implements Runnable {
             lastMouseX = xpos;
             lastMouseY = ypos;
         }
+
+        //A*相关
+//        else if(!handMode){
+//            // 实时路径计算
+//            if (isPathCalculating && pathStartPoint != null) {
+//                Point currentEnd = new Point(xpos, ypos);
+//                calculatePath(pathStartPoint, currentEnd);
+//            }
+//        }
     }
 // 返回当前鼠标位置（实时）
 public Point getCurrentMousePos() {
@@ -643,6 +659,10 @@ public Point getCurrentMousePos() {
                     if (p!=null) {
                         // 添加最近的网格点
                         seedPoints.add(p);
+
+                        //此处在测试renewLine()
+//                        renewLine();
+
                         System.out.println(p.x + "N" + p.y);
                         // 如果有多个点，考虑闭合
                         // 检查是否可以闭合
@@ -660,6 +680,26 @@ public Point getCurrentMousePos() {
                             // 计算最后一点到第一点的路径，添加到points里面
                             //? Dijkstra.findPath((int)p.x, (int)p.y, (int)firstPoint.x, (int)firstPoint.y);
 
+                        }
+                    }
+
+                    //A*相关
+                    if (!isPathCalculating) {
+                        // 第一次点击：设置起点并进入实时模式
+                        pathStartPoint = getPosition();
+                        if (pathStartPoint != null) {
+                            isPathCalculating = true;
+                            currentLivePath.clear(); // 清空实时路径
+                        }
+                    } else {
+                        // 第二次点击：停止实时计算并保存路径,这一步暂时这样，先尝试一个简单的。
+                        isPathCalculating = false;
+                        if (!currentLivePath.isEmpty()) {
+                            confirmedPathHistory.add(new ArrayList<>(currentLivePath));
+                            // 限制历史记录数量
+                            if (confirmedPathHistory.size() > 100) {
+                                confirmedPathHistory.removeFirst();
+                            }
                         }
                     }
                 }
@@ -783,8 +823,8 @@ public Point getCurrentMousePos() {
             this.x = x;
             this.y = y;
         }
-    }
 
+    }
 
     /**
      * 表示2D线段的内部类
@@ -832,55 +872,48 @@ public Point getCurrentMousePos() {
     public void addnewPoints(List<Point> points){
         this.pointListList.add(points);
     }
-
     //for A*
-    private void calculatePath() {
-        if (ImageProcess.costMatrix == null) {
-            System.out.println("Cost matrix not initialized. Process image first.");
-            return;
-        }
+//    private void calculatePath() {
+//        if (ImageProcess.costMatrix == null) {
+//            System.out.println("Cost matrix not initialized. Process image first.");
+//            return;
+//        }
+//
+//        Point startPoint = getPosition();
+//        Point endPoint = getCurrentMousePos();
+//        if (startPoint == null || endPoint == null) return;
+//
+//        float[] startGrid = screenToGridCoordinates((float) startPoint .x, (float) startPoint.y);
+//        // 转换终点到网格坐标
+//        float[] endGrid = screenToGridCoordinates((float)endPoint.x, (float)endPoint.y);
+//        int startX = (int) Math.round(startGrid[0]);
+//        int startY = (int) Math.round(startGrid[1]);
+//        int endX = (int)Math.round(endGrid[0]);
+//        int endY = (int)Math.round(endGrid[1]);
+//
+//        // 调整y轴方向
+//        int matrixHeight = ImageProcess.costMatrix.length;
+//        int matrixStartY = matrixHeight - 1 - startY;
+//        int matrixEndY = matrixHeight - 1 - endY;
+//
+//        // 检查边界
+//        if (startX <0 || startX >= ImageProcess.costMatrix[0].length || matrixStartY <0 || matrixStartY >= matrixHeight ||
+//                endX <0 || endX >= ImageProcess.costMatrix[0].length || matrixEndY <0 || matrixEndY >= matrixHeight) {
+//            System.out.println("Invalid start/end coordinates");
+//            return;
+//        }
+//
+//
+//
+//        // 转换路径坐标回图形界面
+//        seedPoints.clear();
+//        for (Point node : path) {
+//            double guiY = matrixHeight - 1 - node.y;
+//            seedPoints.add(new Point(node.x, guiY));
+//        }
+//        renewLine();
+//    }
 
-        Point startPoint = getPosition();
-        Point endPoint = getCurrentMousePos();
-        if (startPoint == null || endPoint == null) return;
 
-        // 转换终点到网格坐标
-        float[] endGrid = screenToGridCoordinates((float)endPoint.x, (float)endPoint.y);
-        int startX = (int)startPoint.x;
-        int startY = (int)startPoint.y;
-        int endX = (int)Math.round(endGrid[0]);
-        int endY = (int)Math.round(endGrid[1]);
-
-        // 调整y轴方向
-        int matrixHeight = ImageProcess.costMatrix.length;
-        int matrixStartY = matrixHeight - 1 - startY;
-        int matrixEndY = matrixHeight - 1 - endY;
-
-        // 检查边界
-        if (startX <0 || startX >= ImageProcess.costMatrix[0].length || matrixStartY <0 || matrixStartY >= matrixHeight ||
-                endX <0 || endX >= ImageProcess.costMatrix[0].length || matrixEndY <0 || matrixEndY >= matrixHeight) {
-            System.out.println("Invalid start/end coordinates");
-            return;
-        }
-
-        // 获取路径
-        List<Point> path = AStar.findPath(startX, matrixStartY, endX, matrixEndY, ImageProcess.costMatrix);
-
-        // 转换路径坐标回图形界面
-        seedPoints.clear();
-        for (Point node : path) {
-            double guiY = matrixHeight - 1 - node.y;
-            seedPoints.add(new Point(node.x, guiY));
-        }
-        renewLine();
-    }
-
-    // 在键盘回调中触发路径计算（例如绑定到P键）
-    private void keyCallbackA(long window, int key, int scancode, int action, int mods) {
-        // 原有其他按键处理...
-        if (key == GLFW_KEY_P && action == GLFW_PRESS) {
-            calculatePath();
-        }
-    }
 }
 
