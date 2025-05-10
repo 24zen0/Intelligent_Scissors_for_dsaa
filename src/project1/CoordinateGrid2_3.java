@@ -249,7 +249,7 @@ public class CoordinateGrid2_3 implements Runnable {
             while (accumulator >= UPDATE_RATE) {
                 accumulator -= UPDATE_RATE;
                 // 这里可以添加固定时间步长的逻辑更新
-
+            AStar.findPath((int) seedPoints.getLast().x,(int)seedPoints.getLast().y,(int)getPosition().x,(int)getPosition().y,ImageProcess.costMatrix);
             }
 
             // 渲染场景
@@ -793,6 +793,7 @@ public Point getCurrentMousePos() {
     public void renewPoints(List<Point> points){
         this.points = points;
     }
+
     //for A*
     private void calculatePath() {
         if (ImageProcess.costMatrix == null) {
