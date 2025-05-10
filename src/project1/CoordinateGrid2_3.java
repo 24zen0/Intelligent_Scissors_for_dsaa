@@ -399,7 +399,7 @@ public class CoordinateGrid2_3 implements Runnable {
      * 根据点集合更新线集合
      */
     private void renewLine() {
-        this.lines.clear();
+//        this.lines.clear();
         // 遍历所有路径点列表
         for (List<Point> pointList : pointListList) {
             int size = pointList.size();
