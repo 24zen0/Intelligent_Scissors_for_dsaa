@@ -223,8 +223,9 @@ public class CoordinateGrid2_3 implements Runnable {
                     pointsList = Collections.emptyList(); // Handle empty case
                 }
                 addnewPoints(pointsList);
-                renewLine();
+
             }
+            renewLine();
 // 渲染场景
             drawAll();
 // 交换缓冲区并处理事件
@@ -390,21 +391,38 @@ public class CoordinateGrid2_3 implements Runnable {
     /**
      * 根据点集合更新线集合
      */
-    private void renewLine(){
+    private void renewLine() {
         this.lines.clear();
-// 连接相邻点形成线条
-        for(int i =0; i< pointListList.size() - 1; i++){
-            List<Point> currentList = pointListList.get(i);
-            if(currentList.size()>=2) {
-                for (int j = 0; j < currentList.size(); j++) {
-                    Point p1 = currentList.get(i);
-                    Point p2 = currentList.get(i + 1);//i还是j？
-                    this.lines.add(new Line((float) p1.x, (float) p1.y, (float) p2.x,
-                            (float) p2.y));//强转了float
+        // 遍历所有路径点列表
+        for (List<Point> pointList : pointListList) {
+            int size = pointList.size();
+            // 确保列表中有足够的点来形成线段
+            if (size >= 2) {
+                // 连接当前列表中的相邻点形成线段
+                for (int i = 0; i < size - 1; i++) {
+                    Point p1 = pointList.get(i);
+                    Point p2 = pointList.get(i + 1);
+                    this.lines.add(new Line((float) p1.x, (float) p1.y, (float) p2.x, (float) p2.y));
                 }
             }
         }
     }
+
+//    private void renewLine(){
+//        this.lines.clear();
+//// 连接相邻点形成线条
+//        for(int i =1; i< pointListList.size() - 1; i++){
+//            List<Point> currentList = pointListList.get(i);
+//            if(currentList.size()>=2) {
+//                for (int j = 0; j < currentList.size(); j++) {
+//                    Point p1 = currentList.get(i);
+//                    Point p2 = currentList.get(i + 1);//i还是j？
+//                    this.lines.add(new Line((float) p1.x, (float) p1.y, (float) p2.x,
+//                            (float) p2.y));//强转了float
+//                }
+//            }
+//        }
+//    }
     /**
      * 在窗⼝左下⻆显示当前缩放⽐例
      */
@@ -590,24 +608,24 @@ public class CoordinateGrid2_3 implements Runnable {
                         }
                     }
 //A*相关
-                    if (!isPathCalculating) {
-// 第⼀次点击：设置起点并进⼊实时模式
-                        pathStartPoint = getPosition();
-                        if (pathStartPoint != null) {
-                            isPathCalculating = true;
-                            currentLivePath.clear(); // 清空实时路径
-                        }
-                    } else {
-// 第⼆次点击：停⽌实时计算并保存路径,这⼀步暂时这样，先尝试⼀个简单的。
-                        isPathCalculating = false;
-                        if (!currentLivePath.isEmpty()) {
-                            confirmedPathHistory.add(new ArrayList<>(currentLivePath));
-// 限制历史记录数量
-                            if (confirmedPathHistory.size() > 100) {
-                                confirmedPathHistory.removeFirst();
-                            }
-                        }
-                    }
+//                    if (!isPathCalculating) {
+//// 第⼀次点击：设置起点并进⼊实时模式
+//                        pathStartPoint = getPosition();
+//                        if (pathStartPoint != null) {
+//                            isPathCalculating = true;
+//                            currentLivePath.clear(); // 清空实时路径
+//                        }
+//                    } else {
+//// 第⼆次点击：停⽌实时计算并保存路径,这⼀步暂时这样，先尝试⼀个简单的。
+//                        isPathCalculating = false;
+//                        if (!currentLivePath.isEmpty()) {
+//                            confirmedPathHistory.add(new ArrayList<>(currentLivePath));
+//// 限制历史记录数量
+//                            if (confirmedPathHistory.size() > 100) {
+//                                confirmedPathHistory.removeFirst();
+//                            }
+//                        }
+//                    }
                 }
             }
         }
