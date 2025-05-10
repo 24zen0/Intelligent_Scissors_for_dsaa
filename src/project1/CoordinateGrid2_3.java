@@ -46,7 +46,7 @@ public class CoordinateGrid2_3 implements Runnable {
     private boolean imageLoaded = false; // 图片是否已加载
 
     // 鼠标交互相关
-    private double mouseX, mouseY; // 当前鼠标位置
+    private double currentMouseX, currentMouseY; // 当前鼠标位置
     private double lastMouseX, lastMouseY; // 上次鼠标位置
     private boolean ctrlPressed = false; // Ctrl键是否按下
     private static final float DRAG_SENSITIVITY = 1.0f; // 拖动灵敏度
@@ -125,8 +125,8 @@ public class CoordinateGrid2_3 implements Runnable {
 
         // 设置各种回调函数
         glfwSetKeyCallback(window, this::keyCallback);
-        glfwSetCursorPosCallback(window, this::cursorPosCallback);
-        glfwSetMouseButtonCallback(window, this::mouseButtonCallback);
+        glfwSetCursorPosCallback(window, this::currentMousePosCallback);
+        glfwSetMouseButtonCallback(window, this::mouseClickCallback);
         glfwSetScrollCallback(window, this::scrollCallback);
         glfwSetFramebufferSizeCallback(window, this::framebufferSizeCallback);
 
@@ -550,10 +550,10 @@ public class CoordinateGrid2_3 implements Runnable {
     /**
      * 鼠标移动回调函数
      */
-    private void cursorPosCallback(long window, double xpos, double ypos) {
+    private void currentMousePosCallback(long window, double xpos, double ypos) {
         // 更新鼠标位置
-        mouseX = xpos;
-        mouseY = ypos;
+        currentMouseX = xpos;
+        currentMouseY = ypos;
 
         // 手形模式下的拖动处理
         if (handMode && isDragging) {
@@ -577,8 +577,8 @@ public class CoordinateGrid2_3 implements Runnable {
         }
     }
 // 返回当前鼠标位置（实时）
-public Point getCurrentMousePosition() {
-    return new Point(mouseX, mouseY);
+public Point getCurrentMousePos() {
+    return new Point(currentMouseX, currentMouseY);
 }
 
 
@@ -586,51 +586,57 @@ public Point getCurrentMousePosition() {
     /**
      * 鼠标按钮回调函数
      */
-    private void mouseButtonCallback(long window, int button, int action, int mods) {
+    private void mouseClickCallback(long window, int button, int action, int mods) {
         // 左键处理
         if(button == GLFW_MOUSE_BUTTON_LEFT){
             if(handMode){
-                // 手形模式下的拖动开始/结束
                 if (action == GLFW_PRESS) {
                     isDragging = true;
-                    lastMouseX = mouseX;
-                    lastMouseY = mouseY;
+                    lastMouseX = currentMouseX;
+                    lastMouseY = currentMouseY;
                 } else if (action == GLFW_RELEASE) {
                     isDragging = false;
                 }
             }else{
-                // 普通模式下的点添加
                 if (action == GLFW_PRESS) {
-                    Point p = getPosition(); // 获取网格对齐位置
+                    // 实现标点
+                    Point p = getPosition();
+                    // 检查是否在坐标系范围内
                     if (p!=null) {
-                        seedPoints.add(p); // 添加种子点
-
-                        // 检查是否可以闭合路径
+                        // 添加最近的网格点
+                        seedPoints.add(p);
+                        System.out.println(p.x + "N" + p.y);
+                        // 如果有多个点，考虑闭合
+                        // 检查是否可以闭合
                         if (seedPoints.size() > 2 && !isClosed) {
                             Point firstPoint = seedPoints.get(0);
                             float distance = (float) Math.sqrt(
                                     pow(p.x - firstPoint.x, 2) +
                                             pow(p.y - firstPoint.y, 2)
                             );
-                            // 如果距离足够近则闭合路径
+                            // 闭合阈值设为网格步长的1.5倍
                             if (distance < gridStep * 1.5f) {
                                 lines.add(new Line((float) p.x, (float) p.y, (float) firstPoint.x, (float) firstPoint.y));
                                 isClosed = true;
                             }
+                            // 计算最后一点到第一点的路径，添加到points里面
+                            //? Dijkstra.findPath((int)p.x, (int)p.y, (int)firstPoint.x, (int)firstPoint.y);
+
                         }
                     }
                 }
             }
         }
-        // 右键删除最后一个种子点
         else if(GLFW_MOUSE_BUTTON_RIGHT == button){
-            if(!handMode && action == GLFW_PRESS){
-                Point p = getPosition();
-                if(!seedPoints.isEmpty()){
+            if(!handMode){
+                if(action == GLFW_PRESS){
+                    Point p = getPosition();
+                    // 找到最新的seedpoint，然后判断点击范围是否接近
                     Point prePoint = seedPoints.getLast();
                     int distance = (int)Math.sqrt(pow(prePoint.x - p.x,2)+pow(prePoint.y - p.y,2));
-                    float optDist = distance / scale; // 考虑缩放因素
-                    if(optDist < 10){ // 距离阈值判断
+                    float optDist = distance / scale; // 考虑缩放时点击的准确性会下降
+                    System.out.println("距离最近seedpoint：" + optDist);
+                    if(optDist< 10){
                         seedPoints.removeLast();
                     }
                 }
@@ -651,7 +657,7 @@ public Point getCurrentMousePosition() {
             scale = Math.max(0.1f, Math.min(scale, 10.0f));
 
             // 计算鼠标在归一化坐标系中的位置
-            float[] gridPos = screenToGridCoordinates((float)mouseX, (float)mouseY);
+            float[] gridPos = screenToGridCoordinates((float) currentMouseX, (float) currentMouseY);
             float mouseGridX = gridPos[0] / gridWidth;
             float mouseGridY = gridPos[1] / gridHeight;
 
@@ -761,7 +767,7 @@ public Point getCurrentMousePosition() {
      * 获取鼠标点击点在网格上的对齐位置
      */
     public Point getPosition(){
-        float[] gridPos = screenToGridCoordinates((float)mouseX, (float)mouseY);
+        float[] gridPos = screenToGridCoordinates((float) currentMouseX, (float) currentMouseY);
         float mouseGridX = gridPos[0];
         float mouseGridY = gridPos[1];
 
@@ -795,7 +801,7 @@ public Point getCurrentMousePosition() {
         }
 
         Point startPoint = getPosition();
-        Point endPoint = getCurrentMousePosition();
+        Point endPoint = getCurrentMousePos();
         if (startPoint == null || endPoint == null) return;
 
         // 转换终点到网格坐标
