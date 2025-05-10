@@ -223,9 +223,9 @@ public class CoordinateGrid2_3 implements Runnable {
                     pointsList = Collections.emptyList(); // Handle empty case
                 }
                 addnewPoints(pointsList);
-
+                renewLine();
             }
-            renewLine();
+
 // 渲染场景
             drawAll();
 // 交换缓冲区并处理事件
@@ -326,15 +326,22 @@ public class CoordinateGrid2_3 implements Runnable {
      */
     private void drawPointsAndLines() {
 // 绘制线条
-        if (!lines.isEmpty()) {
-            glColor4f(LINE_COLOR[0], LINE_COLOR[1], LINE_COLOR[2], LINE_COLOR[3]);
-            glBegin(GL_LINES);
-            for (Line line : lines) {
-                glVertex2f(line.x1, line.y1);
-                glVertex2f(line.x2, line.y2);
+        if (!pointListList.isEmpty()) {
+            List<Point> latestPath = pointListList.get(pointListList.size() - 1); // 获取最新路径
+            if (latestPath.size() >= 2) { // 确保有可绘制的线段
+                glColor4f(LINE_COLOR[0], LINE_COLOR[1], LINE_COLOR[2], LINE_COLOR[3]);
+                glBegin(GL_LINES);
+                // 动态生成最新路径的线段并绘制
+                for (int i = 0; i < latestPath.size() - 1; i++) {
+                    Point p1 = latestPath.get(i);
+                    Point p2 = latestPath.get(i + 1);
+                    glVertex2f((float) p1.x, (float) p1.y);
+                    glVertex2f((float) p2.x, (float) p2.y);
+                }
+                glEnd();
             }
-            glEnd();
         }
+
 // 绘制反⾊圆圈(种⼦点标记)
         if (!seedPoints.isEmpty()) {
 // 启⽤反⾊混合模式
@@ -403,7 +410,9 @@ public class CoordinateGrid2_3 implements Runnable {
                     Point p1 = pointList.get(i);
                     Point p2 = pointList.get(i + 1);
                     this.lines.add(new Line((float) p1.x, (float) p1.y, (float) p2.x, (float) p2.y));
+
                 }
+
             }
         }
     }
