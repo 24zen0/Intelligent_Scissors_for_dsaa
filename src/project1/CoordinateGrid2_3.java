@@ -52,7 +52,8 @@ public class CoordinateGrid2_3 implements Runnable {
     private static final float DRAG_SENSITIVITY = 1.0f; // 拖动灵敏度
 
     // 绘制的几何元素
-    private List<Point> points = new ArrayList<>(); // 点集合
+    //private List<Point> points = new ArrayList<>(); // 点集合
+    private List<List<Point>> pointListList = new ArrayList<>();
     private List<Line> lines = new ArrayList<>(); // 线集合
     private List<Point> seedPoints = new ArrayList<>(); // 种子点(用于路径)
     private boolean isClosed = false; // 路径是否闭合
@@ -249,7 +250,9 @@ public class CoordinateGrid2_3 implements Runnable {
             while (accumulator >= UPDATE_RATE) {
                 accumulator -= UPDATE_RATE;
                 // 这里可以添加固定时间步长的逻辑更新
-            AStar.findPath((int) seedPoints.getLast().x,(int)seedPoints.getLast().y,(int)getPosition().x,(int)getPosition().y,ImageProcess.costMatrix);
+            //AStar.findPath((int) seedPoints.getLast().x,(int)seedPoints.getLast().y,(int)getPosition().x,(int)getPosition().y,ImageProcess.costMatrix);
+                addnewPoints(AStar.findPath((int) seedPoints.getLast().x,(int)seedPoints.getLast().y,(int)getPosition().x,(int)getPosition().y,ImageProcess.costMatrix));
+
             }
 
             // 渲染场景
@@ -446,10 +449,13 @@ public class CoordinateGrid2_3 implements Runnable {
     private void renewLine(){
         this.lines.clear();
         // 连接相邻点形成线条
-        for(int i =0; i< points.size() - 1; i++){
-            Point p1 = points.get(i);
-            Point p2 = points.get(i+1);
-            this.lines.add(new Line((float) p1.x, (float) p1.y, (float) p2.x, (float) p2.y));
+        for(int i =0; i< pointListList.size() - 1; i++){
+            List<Point> currentList = pointListList.get(i);
+            for(int j = 0; j < currentList.size(); j++){
+                Point p1 = currentList.get(i);
+                Point p2 = currentList.get(i+1);//i还是j？
+                this.lines.add(new Line((float) p1.x,(float)p1.y,(float)p2.x,(float)p2.y));//强转了float
+            }
         }
     }
 
@@ -524,6 +530,10 @@ public class CoordinateGrid2_3 implements Runnable {
             loadImage("src/img2.png");
         }
 
+        if (key == GLFW_KEY_R && action == GLFW_PRESS) {
+            loadImage("src/example.png");
+        }
+
         // H键切换手形模式
         if (key == GLFW_KEY_H && action == GLFW_PRESS) {
             handMode = !handMode;
@@ -541,6 +551,34 @@ public class CoordinateGrid2_3 implements Runnable {
         if (key == GLFW_KEY_G && action == GLFW_PRESS) {
             GridMode = !GridMode;
         }
+
+        //enter直接闭合
+        if(key == GLFW_KEY_ENTER){
+            int size = 0;
+            for(int i =0;i<pointListList.size();i++){
+                size += pointListList.get(i).size();
+            }
+            if(size>3){
+                if(isClosed){
+                    //出图
+                }else{
+                    // 第一次，未闭合，将其闭合
+//添加计算路径返回point List的代码
+                }
+            }
+
+        }
+
+        if (key == GLFW_KEY_Z && action == GLFW_PRESS && ctrlPressed) {
+            if(isClosed){
+                isClosed = false;
+                //删除最后一段路径代码
+            }else{
+                seedPoints.removeLast();
+                //删除最后一段路径的代码
+            }
+        }
+
         if (key == GLFW_KEY_P && action == GLFW_PRESS) {
             calculatePath();
         }
@@ -747,6 +785,7 @@ public Point getCurrentMousePos() {
         }
     }
 
+
     /**
      * 表示2D线段的内部类
      */
@@ -790,8 +829,8 @@ public Point getCurrentMousePos() {
     /**
      * 更新点集合
      */
-    public void renewPoints(List<Point> points){
-        this.points = points;
+    public void addnewPoints(List<Point> points){
+        this.pointListList.add(points);
     }
 
     //for A*
@@ -825,12 +864,12 @@ public Point getCurrentMousePos() {
         }
 
         // 获取路径
-        List<AStar.Node> path = AStar.findPath(startX, matrixStartY, endX, matrixEndY, ImageProcess.costMatrix);
+        List<Point> path = AStar.findPath(startX, matrixStartY, endX, matrixEndY, ImageProcess.costMatrix);
 
         // 转换路径坐标回图形界面
         seedPoints.clear();
-        for (AStar.Node node : path) {
-            int guiY = matrixHeight - 1 - node.y;
+        for (Point node : path) {
+            double guiY = matrixHeight - 1 - node.y;
             seedPoints.add(new Point(node.x, guiY));
         }
         renewLine();

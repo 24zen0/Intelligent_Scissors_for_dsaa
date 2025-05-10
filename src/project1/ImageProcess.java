@@ -69,24 +69,11 @@ public class ImageProcess {
         return result;
     }
 
-    //保存灰度矩阵
-    /*public static void saveGrayMatrixToTextFile(int[][] matrix, String filePath) throws IOException {
-        FileWriter writer = new FileWriter(filePath);
-        for (int[] row : matrix) {
-            for (int value : row) {
-                writer.write(value + " ");
-            }
-            writer.write("\n");
-        }
-        writer.close();
-        System.out.println("Gray matrix saved to " + filePath);
-    }*/
 
     public static double[][] sobelKernel(int[][] pixels) {
         int height = pixels.length;
         int width = pixels[0].length;
         double[][] result = new double[height][width];
-
 
         // 定义Sobel算子
         int[][] sobelX = {
@@ -112,7 +99,6 @@ public class ImageProcess {
                         gy += pixels[y + i][x + j] * sobelY[i + 1][j + 1];
                     }
                 }
-
                 double G = Math.sqrt(gx * gx + gy * gy);
                 result[y][x] = G;
 //                maxG = Math.max(maxG, G);
@@ -129,20 +115,5 @@ public class ImageProcess {
         return result;
     }
 
-
-
-
-    //保存sobel矩阵
-    public static void saveSobelMatrixToTextFile(double[][] matrix, String filePath) throws IOException {
-        FileWriter writer = new FileWriter(filePath);
-        for (double[] row : matrix) {
-            for (double value : row) {
-                writer.write(value + " ");
-            }
-            writer.write("\n");
-        }
-        writer.close();
-        System.out.println("Sobel matrix saved to " + filePath);
-    }
 
 }
