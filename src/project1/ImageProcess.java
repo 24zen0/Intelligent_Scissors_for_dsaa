@@ -7,8 +7,6 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 
-
-
 public class ImageProcess {
 
     // 静态全局缓存 cost 矩阵
