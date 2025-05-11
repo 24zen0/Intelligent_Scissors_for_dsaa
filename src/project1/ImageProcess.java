@@ -4,17 +4,22 @@ import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 
 public class ImageProcess {
 
+    // 静态全局缓存 cost 矩阵
     static double[][] costMatrix;
 
+    // 主流程方法：读取图像并生成 cost 矩阵
     public static void processImageToSobel(String imagePath) throws IOException {
+        // 读取图像
         BufferedImage image = ImageIO.read(new File(imagePath));
         int width = image.getWidth();
         int height = image.getHeight();
 
+        // 获取原始像素
         int[][] pixels = new int[height][width];
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
@@ -22,10 +27,12 @@ public class ImageProcess {
             }
         }
 
+        // 生成灰度矩阵和 Sobel 矩阵
         int[][] grayPixels = grayscale(pixels);
         int[][] blurredPixels = gaussianBlur(grayPixels); // 高斯模糊预处理
         double[][] sobelMatrix = sobelKernel(blurredPixels);
 
+        // 计算并缓存 cost 矩阵
         costMatrix = new double[height][width];
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
@@ -59,6 +66,7 @@ public class ImageProcess {
                 result[y][x] = (int) Math.round(sum);
             }
         }
+
         return result;
     }
 

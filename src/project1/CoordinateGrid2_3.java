@@ -1,7 +1,13 @@
 package project1;
+import org.lwjgl.BufferUtils;
 import org.lwjgl.glfw.*;
 import org.lwjgl.opengl.*;
 import org.lwjgl.system.*;
+
+import javax.imageio.ImageIO;
+import java.awt.*;
+import java.awt.image.DataBufferInt;
+import java.io.File;
 import java.io.IOException;
 import java.nio.*;
 import java.util.*;
@@ -17,13 +23,22 @@ import static org.lwjgl.stb.STBImage.*;
 import static org.lwjgl.stb.STBEasyFont.*;
 import static org.lwjgl.system.MemoryStack.*;
 import static org.lwjgl.system.MemoryUtil.*;
+import java.awt.image.BufferedImage;
+import java.util.ArrayList;
+import java.util.List;
+
 public class CoordinateGrid2_3 implements Runnable {
     // 状态变量
+    private boolean pathCoolingMode= false;
+    private boolean snapMode = false;
     private boolean handMode = false; // ⼿形拖动模式标志
     private boolean isDragging = false; // 是否正在拖动
     private boolean GridMode = false; // 是否显示⽹格
+    private boolean shouldOpenImageWindow = false;
+    private boolean imageWindowOpen = false;
     // 窗⼝和坐标系相关变量
     private long window; // GLFW窗⼝句柄
+    private static long imageWindow = NULL; // 第二窗口
     private int windowWidth, windowHeight; // 窗⼝宽⾼
     private final int gridStep = 1; // ⽹格步⻓
     // ⽹格尺⼨(会根据加载的图⽚⾃动调整)
@@ -33,10 +48,13 @@ public class CoordinateGrid2_3 implements Runnable {
     private float scale = 1.0f; // 缩放⽐例
     private float offsetX = 0.0f, offsetY = 0.0f; // 偏移量
     // 图⽚相关变量
+    BufferedImage originalImage;
     private int textureID = -1; // 纹理ID
     private int imageWidth = 0; // 图⽚宽度
     private int imageHeight = 0; // 图⽚⾼度
     private boolean imageLoaded = false; // 图⽚是否已加载
+    private int maskTextureID = -1; // 第二窗口
+    private int finalTexture = -1;
     // ⿏标交互相关
     private double currentMouseX, currentMouseY; // 当前⿏标位置
     private double lastMouseX, lastMouseY; // 上次⿏标位置
@@ -50,6 +68,7 @@ public class CoordinateGrid2_3 implements Runnable {
     private List<Line> linesPreview = new ArrayList<>(); // 线集合
     private List<Line> linesSave = new ArrayList<>(); // 线集合
 
+
     private List<Point> seedPoints = new ArrayList<>(); // 种⼦点(⽤于路径)
     private boolean isClosed = false; // 路径是否闭合
     private float scaleCircle = 1.0f; // 圆圈缩放⽐例
@@ -61,7 +80,7 @@ public class CoordinateGrid2_3 implements Runnable {
     private static final float[] GRID_COLOR = {0.5f, 0.5f, 0.5f, 1.0f}; // ⽹格颜⾊
     private static final float[] AXIS_COLOR = {0.0f, 0.0f, 0.0f, 1.0f}; // 坐标轴颜⾊
     private static final float[] POINT_COLOR = {0.0f, 1.0f, 0.0f, 1.0f}; // 点颜⾊
-    private static final float[] LINE_COLOR = {0.0f, 0.0f, 1.0f, 1.0f}; // 线颜⾊
+    private static final float[] LINE_COLOR = {1.0f, 0.0f, 1.0f, 1.0f}; // 线颜⾊
     private static final float[] TEXT_COLOR = {0.0f, 0.0f, 0.0f, 1.0f}; // ⽂本颜⾊
     // 光标相关
     private long handCursor = 0; // ⼿形光标
@@ -232,7 +251,13 @@ public class CoordinateGrid2_3 implements Runnable {
                 if (!seedPoints.isEmpty() && getPosition() != null) {
                     Point start = seedPoints.getLast();
                     //Point end = getPosition();
-                    Point end = snap((int) getPosition().x, (int) getPosition().y,25);
+                    Point end = new Point((int) getPosition().x, (int) getPosition().y);
+
+                    if(snapMode){
+                         end = snap((int) getPosition().x, (int) getPosition().y,15);
+                    }else{
+                         end = new Point((int) getPosition().x, (int) getPosition().y);
+                    }
 
 
                     pointsList = AStar.Node.convertNodesToPoints(
@@ -254,18 +279,317 @@ public class CoordinateGrid2_3 implements Runnable {
                 //     monitorPathStability(pointsList);
                 //     checkAutoSeedGeneration();
                 // }
-                processPathCooling(); // Check and save stable paths
-
-
-//
+                if(pathCoolingMode){
+                    processPathCooling(); // Check and save stable paths
+                }
             }
 
 // 渲染场景
             drawAll();
+
+            // 检测是否应该开启第二窗口
+            if (shouldOpenImageWindow && !imageWindowOpen) {
+                openImageWindow();
+                shouldOpenImageWindow = false;
+                imageWindowOpen = true;
+            }
+            // 第二窗口的渲染
+            if (imageWindow != NULL) {
+                glfwMakeContextCurrent(imageWindow);
+                renderImageWindow();
+                glfwSwapBuffers(imageWindow);
+
+                // 检查图片窗口是否关闭
+                if (glfwWindowShouldClose(imageWindow)) {
+                    glfwDestroyWindow(imageWindow);
+                    imageWindow = NULL;
+                    imageWindowOpen = false;
+                }
+            }
+
+
 // 交换缓冲区并处理事件
             glfwSwapBuffers(window);
             glfwPollEvents();
         }
+    }
+    private void openImageWindow() {
+        // 配置图片窗口
+        glfwDefaultWindowHints();
+        glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+
+        // 创建图片窗口（共享主窗口的上下文）
+        imageWindow = glfwCreateWindow(600, 400, "图片展示窗口", NULL, window);
+        if (imageWindow == NULL) {
+            throw new RuntimeException("Failed to create the image window");
+        }
+
+        // 设置窗口位置（主窗口右侧）
+        try (MemoryStack stack = stackPush()) {
+            IntBuffer pWidth = stack.mallocInt(1);
+            IntBuffer pHeight = stack.mallocInt(1);
+            IntBuffer pX = stack.mallocInt(1);
+            IntBuffer pY = stack.mallocInt(1);
+
+            glfwGetWindowSize(window, pWidth, pHeight);
+            glfwGetWindowPos(window, pX, pY);
+
+            glfwSetWindowPos(
+                    imageWindow,
+                    pX.get(0) + pWidth.get(0) + 10,
+                    pY.get(0)
+            );
+        }
+
+        // 初始化图片窗口的OpenGL上下文
+        glfwMakeContextCurrent(imageWindow);
+        GL.createCapabilities();
+        glClearColor(0.9f, 0.9f, 0.9f, 1.0f);
+
+        // 加载图片纹理
+        createAndApplyMask(originalImage);
+        // 显示图片窗口
+        glfwShowWindow(imageWindow);
+    }
+
+    public void createAndApplyMask(BufferedImage originalImage) {
+        System.out.println("inter createAndApplyMask");
+        // 1. 创建原始图像纹理
+        textureID = createTexture(originalImage, false);
+
+        // 2. 创建掩膜纹理（注意二值图像的特殊处理）
+        ArrayList<Point> closePath = new ArrayList<>();
+        for(int i=0; i<pointListListSave.size(); i++) {
+            closePath.addAll(pointListListSave.get(i));
+        }
+        BufferedImage mask = convertToMaskWithFill(closePath, imageWidth, imageHeight);
+
+        BufferedImage finalImage = cropWithMask(originalImage, mask);
+
+//        maskTextureID = createTexture(mask, true);
+        maskTextureID = createTexture(mask, false);
+        // 3. 应用掩膜生成最终纹理
+        finalTexture = createRGBATexture(finalImage);
+        System.out.println("final");
+    }
+
+    // 创建OpenGL纹理
+    private int createTexture(BufferedImage image, boolean isBinaryMask) {
+        int[] pixels = new int[image.getWidth() * image.getHeight()];
+        image.getRGB(0, 0, image.getWidth(), image.getHeight(), pixels, 0, image.getWidth());
+
+        ByteBuffer buffer = BufferUtils.createByteBuffer(image.getWidth() * image.getHeight() * 4);
+
+        for (int y = 0; y < image.getHeight(); y++) {
+            for (int x = 0; x < image.getWidth(); x++) {
+                int pixel = pixels[y * image.getWidth() + x];
+                buffer.put((byte) ((pixel >> 16) & 0xFF)); // R
+                buffer.put((byte) ((pixel >> 8) & 0xFF));  // G
+                buffer.put((byte) (pixel & 0xFF));         // B
+
+                // 二值掩膜特殊处理：将亮度转换为alpha值
+                if(isBinaryMask) {
+                    int r = (pixel >> 16) & 0xFF;
+                    int g = (pixel >> 8) & 0xFF;
+                    int b = pixel & 0xFF;
+                    int alpha = (r + g + b) / 3; // 计算灰度值作为alpha
+                    buffer.put((byte) alpha);    // A
+                } else {
+                    buffer.put((byte) ((pixel >> 24) & 0xFF)); // 普通图像的原始alpha
+                }
+            }
+        }
+        buffer.flip();
+
+        int textureID = glGenTextures();
+        glBindTexture(GL_TEXTURE_2D, textureID);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.getWidth(), image.getHeight(),
+                0, GL_RGBA, GL_UNSIGNED_BYTE, buffer);
+
+        return textureID;
+    }
+
+    // 渲染纹理到指定位置
+    private void renderTexture(int textureID, float x, float y, float scale) {
+        GL.createCapabilities();
+        glEnable(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, textureID);
+
+        glBegin(GL_QUADS);
+        glTexCoord2f(0, 0); glVertex2f(x, y);
+        glTexCoord2f(1, 0); glVertex2f(x + scale, y);
+        glTexCoord2f(1, 1); glVertex2f(x + scale, y + scale);
+        glTexCoord2f(0, 1); glVertex2f(x, y + scale);
+        glEnd();
+    }
+    /**
+     * 根据二值掩膜裁剪图像
+     * @param originalImage 原始图像
+     * @param mask 二值掩膜(BufferedImage.TYPE_BYTE_BINARY)
+     * @return 裁剪后的图像(保留掩膜白色区域)
+     */
+    public static BufferedImage cropWithMask(BufferedImage originalImage, BufferedImage mask) {
+        // 1. 获取掩膜的非空区域边界
+        Rectangle bounds = findMaskBounds(mask);
+        if (bounds.width <= 0 || bounds.height <= 0) {
+            return new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB); // 返回1x1透明图像
+        }
+
+        // 2. 创建结果图像（带透明度）
+        BufferedImage result = new BufferedImage(
+                bounds.width, bounds.height, BufferedImage.TYPE_INT_ARGB);
+
+        // 3. 提取掩膜的对应区域（优化：直接处理像素，避免getSubimage拷贝）
+        int[] maskPixels = new int[bounds.width * bounds.height];
+        mask.getRGB(bounds.x, bounds.y, bounds.width, bounds.height,
+                maskPixels, 0, bounds.width);
+
+        // 4. 提取并处理原始图像区域
+        int[] originalPixels = new int[bounds.width * bounds.height];
+        originalImage.getRGB(bounds.x, bounds.y, bounds.width, bounds.height,
+                originalPixels, 0, bounds.width);
+
+        // 5. 应用掩膜（黑色区域变透明）
+        for (int i = 0; i < originalPixels.length; i++) {
+            // 掩膜黑色像素（RGB全0）则设置完全透明
+            if ((maskPixels[i] & 0x00FFFFFF) == 0) {
+                originalPixels[i] = 0; // 保留RGB，Alpha=0
+                System.out.print("processiing");
+            }
+        }
+
+        // 6. 设置结果像素
+        result.setRGB(0, 0, bounds.width, bounds.height, originalPixels, 0, bounds.width);
+        return result;
+    }
+    /**
+     * 找到掩膜中白色区域的边界矩形
+     */
+    private static Rectangle findMaskBounds(BufferedImage mask) {
+        int minX = Integer.MAX_VALUE;
+        int minY = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE;
+        int maxY = Integer.MIN_VALUE;
+
+        for (int y = 0; y < mask.getHeight(); y++) {
+            for (int x = 0; x < mask.getWidth(); x++) {
+                if ((mask.getRGB(x, y) & 0xFFFFFF) != 0) { // 非黑色像素
+                    minX = Math.min(minX, x);
+                    minY = Math.min(minY, y);
+                    maxX = Math.max(maxX, x);
+                    maxY = Math.max(maxY, y);
+                }
+            }
+        }
+
+        return new Rectangle(minX, minY, maxX - minX + 1, maxY - minY + 1);
+    }
+    /**
+     * 高质量图像缩放
+     * @param image 原始图像
+     * @param width 目标宽度
+     * @param height 目标高度
+     * @param highQuality 是否使用高质量缩放
+     */
+    public static BufferedImage resizeImage(BufferedImage image,
+                                            int width, int height,
+                                            boolean highQuality) {
+        BufferedImage scaled = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+
+        Graphics2D g = scaled.createGraphics();
+
+        if (highQuality) {
+            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+                    RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+            g.setRenderingHint(RenderingHints.KEY_RENDERING,
+                    RenderingHints.VALUE_RENDER_QUALITY);
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+                    RenderingHints.VALUE_ANTIALIAS_ON);
+        }
+
+        g.drawImage(image, 0, 0, width, height, null);
+        g.dispose();
+
+        return scaled;
+    }
+
+
+
+    private void renderImageWindow() {
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        renderTexture(finalTexture, 0.0f, 0.0f, 0.5f);
+    }
+    /**
+     * 渲染时动态调整纹理大小
+     * @param textureID 纹理ID
+     * @param x 渲染位置X
+     * @param y 渲染位置Y
+     * @param width 渲染宽度
+     * @param height 渲染高度
+     */
+    public static void renderTextureScaled(int textureID,
+                                           float x, float y,
+                                           float width, float height) {
+        glEnable(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, textureID);
+
+        glBegin(GL_QUADS);
+        glTexCoord2f(0, 0); glVertex2f(x, y);
+        glTexCoord2f(1, 0); glVertex2f(x + width, y);
+        glTexCoord2f(1, 1); glVertex2f(x + width, y + height);
+        glTexCoord2f(0, 1); glVertex2f(x, y + height);
+        glEnd();
+    }
+
+    /**
+     * 通用RGBA纹理生成方法（严格保持原始像素数据）
+     * @param image 源图像（必须包含Alpha通道，建议使用BufferedImage.TYPE_INT_ARGB）
+     * @return 生成的OpenGL纹理ID
+     */
+    private int createRGBATexture(BufferedImage image) {
+        // 验证图像类型
+        if (image.getType() != BufferedImage.TYPE_INT_ARGB &&
+                image.getType() != BufferedImage.TYPE_4BYTE_ABGR) {
+            throw new IllegalArgumentException("输入图像必须包含Alpha通道");
+        }
+
+        // 准备像素缓冲区
+        ByteBuffer buffer = BufferUtils.createByteBuffer(image.getWidth() * image.getHeight() * 4);
+
+        // 直接获取底层数据（比getRGB更快）
+        int[] pixels = ((DataBufferInt) image.getRaster().getDataBuffer()).getData();
+
+        // 按原始顺序填充RGBA数据
+        for (int pixel : pixels) {
+            buffer.put((byte) ((pixel >> 16) & 0xFF)); // R
+            buffer.put((byte) ((pixel >> 8)  & 0xFF)); // G
+            buffer.put((byte) (pixel        & 0xFF)); // B
+            buffer.put((byte) ((pixel >> 24) & 0xFF)); // A
+        }
+        buffer.flip();
+
+        // 创建并配置纹理
+        int textureID = glGenTextures();
+        glBindTexture(GL_TEXTURE_2D, textureID);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+        // 上传纹理数据（使用GL_RGBA格式）
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, image.getWidth(), image.getHeight(),
+                0, GL_RGBA, GL_UNSIGNED_BYTE, buffer);
+
+        return textureID;
     }
     /**
      * 加载图⽚⽂件
@@ -280,6 +604,7 @@ public class CoordinateGrid2_3 implements Runnable {
             IntBuffer comp = stack.mallocInt(1); // 通道数
 // 加载图⽚(强制4通道RGBA)
             ByteBuffer imageBuffer = stbi_load(path, w, h, comp, 4);
+            originalImage = ImageIO.read(new File(path));;
             if (imageBuffer == null) {
                 System.err.println("Failed to load image: " + stbi_failure_reason());
                 return;
@@ -472,7 +797,6 @@ public class CoordinateGrid2_3 implements Runnable {
                     Point p1 = pointList.get(i);
                     Point p2 = pointList.get(i + 1);
                     this.linesPreview.add(new Line((float) p1.x, (float) p1.y, (float) p2.x, (float) p2.y));
-
                 }
 
             }
@@ -480,62 +804,6 @@ public class CoordinateGrid2_3 implements Runnable {
 
     }
 
-//    private void renewLine(){
-//        this.lines.clear();
-//// 连接相邻点形成线条
-//        for(int i =1; i< pointListList.size() - 1; i++){
-//            List<Point> currentList = pointListList.get(i);
-//            if(currentList.size()>=2) {
-//                for (int j = 0; j < currentList.size(); j++) {
-//                    Point p1 = currentList.get(i);
-//                    Point p2 = currentList.get(i + 1);//i还是j？
-//                    this.lines.add(new Line((float) p1.x, (float) p1.y, (float) p2.x,
-//                            (float) p2.y));//强转了float
-//                }
-//            }
-//        }
-//    }
-    /**
-     * 在窗⼝左下⻆显示当前缩放⽐例
-     */
-    private void displayScale() {
-        String scaleText = String.format("Scale: %.2f", scale);
-// 分配缓冲区存储字体数据
-        ByteBuffer charBuffer = MemoryUtil.memAlloc(scaleText.length() * 270);
-        int quads = stb_easy_font_print(0, 0, scaleText, null, charBuffer);
-// 设置正交投影矩阵
-        glMatrixMode(GL_PROJECTION);
-        glPushMatrix();
-        glLoadIdentity();
-        glOrtho(0, windowWidth, windowHeight, 0, -1, 1);
-        glMatrixMode(GL_MODELVIEW);
-        glPushMatrix();
-        glLoadIdentity();
-        glTranslatef(10, windowHeight - 20, 0);
-// 使⽤字体着⾊器
-        glUseProgram(fontShaderProgram);
-        int colorLoc = glGetUniformLocation(fontShaderProgram, "color");
-        glUniform4f(colorLoc, TEXT_COLOR[0], TEXT_COLOR[1], TEXT_COLOR[2],
-                TEXT_COLOR[3]);
-// 绑定并上传顶点数据
-        glBindVertexArray(fontVAO);
-        glBindBuffer(GL_ARRAY_BUFFER, fontVBO);
-        glBufferData(GL_ARRAY_BUFFER, charBuffer, GL_STATIC_DRAW);
-        glScalef(15f, 15f, 1); // 放⼤字体
-// 绘制⽂本
-        glDrawArrays(GL_QUADS, 0, quads * 4);
-// 恢复OpenGL状态
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindVertexArray(0);
-        glUseProgram(0);
-// 恢复矩阵
-        glPopMatrix();
-        glMatrixMode(GL_PROJECTION);
-        glPopMatrix();
-        glMatrixMode(GL_MODELVIEW);
-// 释放内存
-        MemoryUtil.memFree(charBuffer);
-    }
 // ================== 回调函数 ==================
     /**
      * 键盘回调函数
@@ -551,10 +819,10 @@ public class CoordinateGrid2_3 implements Runnable {
         }
 // L键加载图⽚
         if (key == GLFW_KEY_L && action == GLFW_PRESS) {
-            loadImage("src/img2.png");
+            loadImage("src/img.png");
         }
         if (key == GLFW_KEY_R && action == GLFW_PRESS) {
-            loadImage("src/example.png");
+            loadImage("src/img.png");
         }
 // H键切换⼿形模式
         if (key == GLFW_KEY_H && action == GLFW_PRESS) {
@@ -571,20 +839,21 @@ public class CoordinateGrid2_3 implements Runnable {
             GridMode = !GridMode;
         }
 //enter直接闭合，扣图
-//        if(key == GLFW_KEY_ENTER){
+        if(key == GLFW_KEY_ENTER && action == GLFW_PRESS) {
+            shouldOpenImageWindow = true;
 //            int size = 0;
-//            for(int i =0;i<pointListList.size();i++){
-//                size += pointListList.get(i).size();
+//            for(int i =0;i<pointListListSave.size();i++){
+//                size += pointListListSave.get(i).size();
 //            }
 //            if(size>3){
 //                if(isClosed){
-////出图
+//                    shouldOpenImageWindow = true;
 //                }else{
 //// 第⼀次，未闭合，将其闭合
 ////添加计算路径返回point List的代码
 //                }
 //            }
-//        }
+        }
         if (key == GLFW_KEY_Z && action == GLFW_PRESS && ctrlPressed) {
             if(isClosed){
                 isClosed = false;
@@ -595,7 +864,10 @@ public class CoordinateGrid2_3 implements Runnable {
             }
         }
         if (key == GLFW_KEY_P && action == GLFW_PRESS) {
-// calculatePath();
+            snapMode = !snapMode;
+        }
+        if (key == GLFW_KEY_C && action == GLFW_PRESS) {
+            pathCoolingMode = !pathCoolingMode;
         }
     }
     //实时模式下触发路径，有待确认，似乎没有⽤上检测四周范围然后确定grid
@@ -651,7 +923,12 @@ public class CoordinateGrid2_3 implements Runnable {
                 if (action == GLFW_PRESS) {
 // 实现标点
                     //Point p = getPosition();
-                    Point rawPoint = snap((int) getPosition().x, (int) getPosition().y,13);  // 获取原始网格点
+                    Point rawPoint = new Point(currentMouseX, currentMouseY);
+                    if(snapMode){
+                        rawPoint = snap((int) getPosition().x, (int) getPosition().y,15);  // 获取原始网格点
+                    }else{
+                        rawPoint = getPosition();
+                    }
 // 检查是否在坐标系范围内
                     if (rawPoint!=null) {
 // 添加最近的⽹格点
@@ -687,6 +964,9 @@ public class CoordinateGrid2_3 implements Runnable {
                                 // 清空预览相关列表，避免重复
                                 pointListListPreview.clear();
                                 linesPreview.clear();
+                                //出图
+                                shouldOpenImageWindow = true;
+                                System.out.println(shouldOpenImageWindow);
                             }
                             //在点击的时候要保存上一个节点的路径绘制，存到Save当中
 
@@ -805,6 +1085,12 @@ public class CoordinateGrid2_3 implements Runnable {
 // 清理GLFW资源
         glfwFreeCallbacks(window);
         glfwDestroyWindow(window);
+        glDeleteTextures(textureID);
+        if (imageWindow != NULL) {
+            glDeleteTextures(maskTextureID);
+            glDeleteTextures(finalTexture);
+            glfwDestroyWindow(imageWindow);
+        }
         glfwTerminate();
         Objects.requireNonNull(glfwSetErrorCallback(null)).free();
     }
@@ -929,7 +1215,25 @@ public class CoordinateGrid2_3 implements Runnable {
         }
     }
 
+    public BufferedImage convertToMaskWithFill(List<Point> points, int width, int height) {
+        BufferedImage mask = new BufferedImage(width, height, BufferedImage.TYPE_BYTE_BINARY);
+        Graphics2D g2d = mask.createGraphics();
 
+        // 初始化为全黑
+        g2d.setColor(Color.BLACK);
+        g2d.fillRect(0, 0, width, height);
+
+        // 填充多边形内部为白色
+        g2d.setColor(Color.WHITE);
+        Polygon polygon = new Polygon();
+        for (Point p : points) {
+            polygon.addPoint((int)p.x,(int) p.y);
+        }
+        g2d.fill(polygon);
+
+        g2d.dispose();
+        return mask;
+    }
 /**
  * Traverse the path history to find stable points across the last 5 paths
  * and save the stable segment if all paths agree on the same points.
@@ -954,7 +1258,7 @@ public class CoordinateGrid2_3 implements Runnable {
                     break;
                 }
 
-    //            List<Point> historyPath = pathHistory.get(historyIndex);
+                //            List<Point> historyPath = pathHistory.get(historyIndex);
                 Iterator<List<Point>> it = pathHistory.descendingIterator();
                 for (int k = 0; k < i; k++) it.next(); // 跳过前 j-1 条
                 List<Point> historyPath = it.next();
