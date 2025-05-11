@@ -70,12 +70,24 @@ public class CoordinateGrid2_3 implements Runnable {
     // 时间控制
     private final double UPDATE_RATE = 1.0 / 30.0; // 更新频率(30FPS)
     private final double MAX_FRAME_TIME = 0.25; // 最⼤帧时间
+    //路径闭合
+    private boolean isPathClosed = false;
+    private int closedPathIndex = -1;
 
-    List<Point> latestPath;
+    static List<Point> latestPath;
+//    static List<Point> latestPath1;
+//    static List<Point> latestPath2;
+//    static List<Point> latestPath3;
+//    static List<Point> latestPath4;
+
+    // 新增状态变量
+    private Deque<List<Point>> pathHistory = new ArrayDeque<>(5); // 保留最近5帧路径
+    // private float stabilityThreshold = 0.02f; // 路径差异阈值
+    // private int stableFramesRequired = 3; // 需要连续稳定帧数
+    // private int currentStableFrames = 0;
 
 
-    //记录全局最后保留line
-//    private List<Point> latestPath = pointListListPreview.get(pointListListPreview.size() - 1); // 获取最新路径
+
 
     public static void main(String[] args) {
         new CoordinateGrid2_3().run();
@@ -219,16 +231,33 @@ public class CoordinateGrid2_3 implements Runnable {
                 // Check if seedPoints has elements and getPosition() is valid
                 if (!seedPoints.isEmpty() && getPosition() != null) {
                     Point start = seedPoints.getLast();
-                    Point end = getPosition();
+                    //Point end = getPosition();
+                    Point end = snap((int) getPosition().x, (int) getPosition().y,25);
+
+
                     pointsList = AStar.Node.convertNodesToPoints(
                             AStar.findPath((int)start.x, (int)start.y, (int)end.x, (int)end.y, ImageProcess.costMatrix)
                     );
+                    //添加与pathHistory相关的内容
+                    pathHistory.addLast(pointsList);
+                    // 保持最多5条路径
+                    while (pathHistory.size() > 5) {
+                        pathHistory.removeFirst();
+                    }
                 } else {
                     pointsList = Collections.emptyList(); // Handle empty case
                 }
                 renewLine();
                 addNewPointsPreview(pointsList);
 //                addNewPointsSave(latestPath);不需要每次loop都要录入。
+                // if (!pointsList.isEmpty()) {
+                //     monitorPathStability(pointsList);
+                //     checkAutoSeedGeneration();
+                // }
+                processPathCooling(); // Check and save stable paths
+
+
+//
             }
 
 // 渲染场景
@@ -242,6 +271,7 @@ public class CoordinateGrid2_3 implements Runnable {
      * 加载图⽚⽂件
      * @param path 图⽚⽂件路径
      */
+
     private void loadImage(String path) {
         try (MemoryStack stack = stackPush()) {
 // 分配缓冲区存储图⽚尺⼨和通道信息
@@ -336,6 +366,12 @@ public class CoordinateGrid2_3 implements Runnable {
         if (!pointListListPreview.isEmpty()) {
 
             latestPath = pointListListPreview.get(pointListListPreview.size() - 1); // 获取最新路径
+//            latestPath1 = pointListListPreview.get(pointListListPreview.size() - 2); // 获取最新路径
+//            latestPath2 = pointListListPreview.get(pointListListPreview.size() - 3); // 获取最新路径
+//            latestPath3 = pointListListPreview.get(pointListListPreview.size() - 4); // 获取最新路径
+//            latestPath4 = pointListListPreview.get(pointListListPreview.size() - 5); // 获取最新路径
+
+
             if (latestPath.size() >= 2) { // 确保有可绘制的线段
                 glColor4f(LINE_COLOR[0], LINE_COLOR[1], LINE_COLOR[2], LINE_COLOR[3]);
                 glBegin(GL_LINES);
@@ -359,7 +395,7 @@ public class CoordinateGrid2_3 implements Runnable {
             glEnable(GL_BLEND);
             glBlendFunc(GL_ONE_MINUS_DST_COLOR, GL_ZERO);
 // 计算圆圈半径(考虑缩放)
-            float radius = gridWidth * scaleCircle / (scale * 30.0f);
+            float radius = gridWidth * scaleCircle / (scale * 50.0f);
             glColor3f(1, 1, 1); // 必须设置为⽩⾊
 // 为每个种⼦点绘制圆圈
             for (Point point : seedPoints) {
@@ -376,6 +412,7 @@ public class CoordinateGrid2_3 implements Runnable {
 // 恢复默认混合模式
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         }
+
     }
     private void drawLinesSave() {
         if (!linesSave.isEmpty()) { // 改为检查 linesSave
@@ -386,17 +423,10 @@ public class CoordinateGrid2_3 implements Runnable {
                 glVertex2f(line.x2, line.y2);
             }
             glEnd();
+            glColor4f(1.0f,1.0f,1.0f,1.0f);
         }
+
     }
-//// 绘制线条
-//        if (!lines.isEmpty()) {
-//            glColor4f(LINE_COLOR[0], LINE_COLOR[1], LINE_COLOR[2], LINE_COLOR[3]);
-//            glBegin(GL_LINES);
-//            for (Line line : lines) {
-//                glVertex2f(line.x1, line.y1);
-//                glVertex2f(line.x2, line.y2);
-//            }
-//        }
 
     /**
      * 绘制⽹格和坐标轴
@@ -620,14 +650,15 @@ public class CoordinateGrid2_3 implements Runnable {
             }else{
                 if (action == GLFW_PRESS) {
 // 实现标点
-                    Point p = getPosition();
+                    //Point p = getPosition();
+                    Point rawPoint = snap((int) getPosition().x, (int) getPosition().y,13);  // 获取原始网格点
 // 检查是否在坐标系范围内
-                    if (p!=null) {
+                    if (rawPoint!=null) {
 // 添加最近的⽹格点
-                        seedPoints.add(p);
+                        seedPoints.add(rawPoint);
 //此处在测试renewLine()
 // renewLine();
-                        System.out.println(p.x + "N" + p.y);
+                        System.out.println(rawPoint.x + "N" + rawPoint.y);
 
                         double cost = ImageProcess.getCostMatrix((int) getCurrentMousePos().x, (int) getCurrentMousePos().y);  // 正常位置
                         System.out.println("Cost: " + cost);
@@ -636,9 +667,11 @@ public class CoordinateGrid2_3 implements Runnable {
                         if (seedPoints.size() > 2 && !isClosed) {
                             Point firstPoint = seedPoints.get(0);
                             float distance = (float) Math.sqrt(
-                                    pow(p.x - firstPoint.x, 2) +
-                                            pow(p.y - firstPoint.y, 2)
+                                    pow(rawPoint.x - firstPoint.x, 2) +
+                                            pow(rawPoint.y - firstPoint.y, 2)
                             );
+                            // 动态显示闭合距离
+                            System.out.println("当前闭合距离：" + distance + "/" + gridStep*1.5f);
 // 闭合阈值设为⽹格步⻓的1.5倍
 //                            if (distance < gridStep * 1.5f) {
 //                                linesPreview.add(new Line((float) p.x, (float) p.y, (float)
@@ -678,6 +711,19 @@ public class CoordinateGrid2_3 implements Runnable {
                     System.out.println("距离最近seedpoint：" + optDist);
                     if(optDist< 10){
                         seedPoints.removeLast();
+                    }
+                    // 同步删除对应的保存路径
+                    if (!pointListListSave.isEmpty() && !segmentLineCounts.isEmpty()) {
+                        // 获取最后添加的线段数量
+                        int lastSegmentLines = segmentLineCounts.remove(segmentLineCounts.size() - 1);
+                        pointListListSave.remove(pointListListSave.size() - 1);
+
+                        // 从linesSave中移除对应线段
+                        int from = linesSave.size() - lastSegmentLines;
+                        int to = linesSave.size();
+                        if (from >= 0 && to <= linesSave.size()) {
+                            linesSave.subList(from, to).clear();
+                        }
                     }
                 }
             }
@@ -767,11 +813,24 @@ public class CoordinateGrid2_3 implements Runnable {
      * 表示2D点的内部类
      */
     public static class Point {
-        public final double x, y;
+        public double x;
+        public double y;
         public Point(double x, double y) {
             this.x = x;
             this.y = y;
         }
+        @Override
+    public boolean equals(Object obj) {
+     if (this == obj) return true;
+     if (obj == null || getClass() != obj.getClass()) return false;
+      Point point = (Point) obj;
+          return Double.compare(point.x, x) == 0 && Double.compare(point.y, y) == 0;
+}
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(x, y);
+    }
     }
     /**
      * 表示2D线段的内部类
@@ -806,16 +865,44 @@ public class CoordinateGrid2_3 implements Runnable {
         }
         return null;
     }
+
+    public Point snap(int x, int y, int radius) {
+        double minCost = Double.MAX_VALUE;
+        Point snapPoint = new Point(x, y);
+
+        for (int i = -radius; i <= radius; i++) {
+            for (int j = -radius; j <= radius; j++) {
+                int newX = x + i;
+                int newY = y + j;
+
+                if (newX >= 0 && newX < gridWidth && newY >= 0 && newY < gridHeight) {
+                    double cost = ImageProcess.getCostMatrix(newX, newY);
+                    if (cost < minCost) {
+                        minCost = cost;
+                        snapPoint.x = newX;//去掉final
+                        snapPoint.y = newY;
+                    }
+                }
+            }
+        }
+        return snapPoint;
+    }
+
+
     /**
      * 更新点集合
      */
     public void addNewPointsPreview(List<Point> points){
         this.pointListListPreview.add(points);
     }
+
+    private List<Integer> segmentLineCounts = new ArrayList<>();
+
     public void addNewPointsSave(List<Point> points) {
 //        this.pointListListSave.add(points);
         if (points != null && !points.isEmpty()) {
             // 生成线段并保存到 linesSave
+            int startLineCount = linesSave.size();
             pointListListSave.add(new ArrayList<>(points)); // 添加点列表副本
             for (int i = 0; i < points.size() - 1; i++) {
                 Point p1 = points.get(i);
@@ -827,8 +914,78 @@ public class CoordinateGrid2_3 implements Runnable {
                 Point first = points.get(0);
                 Point last = points.get(points.size() - 1);
                 linesSave.add(new Line((float)last.x, (float)last.y, (float)first.x, (float)first.y));
+                isPathClosed = true;
+                closedPathIndex = pointListListSave.size() - 1; // 记录闭合路径索引
+                System.out.println("路径闭合成功！"); // 添加成功提示
+            }
+//            if (isClosed && points.size() >= 2) {
+//                Point first = points.get(0);
+//                Point last = points.get(points.size() - 1);
+//                linesSave.add(new Line((float)last.x, (float)last.y, (float)first.x, (float)first.y));
+//            }
+            // 记录线段数量
+            int addedLines = linesSave.size() - startLineCount;
+            segmentLineCounts.add(addedLines);
+        }
+    }
+
+
+/**
+ * Traverse the path history to find stable points across the last 5 paths
+ * and save the stable segment if all paths agree on the same points.
+ */
+    private void processPathCooling() {
+        if (pathHistory.size() < 5) return;
+
+        List<Point> latestPath = pathHistory.getLast();
+
+        // 从路径末尾向前遍历点
+        for (int index = latestPath.size() - 1; index >= 0; index--) {
+            Point latestPoint = latestPath.get(index);
+            boolean isStable = true;
+
+            // 检查最近4条历史路径（倒数第2到倒数第5）
+            for (int i = 1; i <= 4; i++) { // i表示倒数第i条路径（1=倒数第2条）
+                int historyIndex = pathHistory.size() - 1 - i;
+
+                // 检查历史索引是否有效
+                if (historyIndex < 0 || historyIndex >= pathHistory.size()) {
+                    isStable = false;
+                    break;
+                }
+
+    //            List<Point> historyPath = pathHistory.get(historyIndex);
+                Iterator<List<Point>> it = pathHistory.descendingIterator();
+                for (int k = 0; k < i; k++) it.next(); // 跳过前 j-1 条
+                List<Point> historyPath = it.next();
+
+                // 检查历史路径是否有足够长度
+                if (historyPath.size() <= index) {
+                    isStable = false;
+                    break;
+                }
+                Point historyPoint = historyPath.get(index);
+
+                if (!isPointStable(historyPoint, latestPoint, 1)) {
+                    isStable = false;
+                    break;
+                }
+            }
+
+            if (isStable) {
+                // 保存稳定路径段
+                List<Point> stableSegment = latestPath.subList(0, index + 1);
+                addNewPointsSave(stableSegment);
+
+                // 更新种子点并清空预览
+                seedPoints.add(latestPoint);
+                pointListListPreview.clear();
+                return;
             }
         }
     }
 
+    private boolean isPointStable(Point p1, Point p2, float threshold) {
+        return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2)) <= threshold;
+    }
 }
