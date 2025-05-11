@@ -70,6 +70,9 @@ public class CoordinateGrid2_3 implements Runnable {
     // 时间控制
     private final double UPDATE_RATE = 1.0 / 30.0; // 更新频率(30FPS)
     private final double MAX_FRAME_TIME = 0.25; // 最⼤帧时间
+    //路径闭合
+    private boolean isPathClosed = false;
+    private int closedPathIndex = -1;
 
     List<Point> latestPath;
 
@@ -645,6 +648,8 @@ public class CoordinateGrid2_3 implements Runnable {
                                     pow(rawPoint.x - firstPoint.x, 2) +
                                             pow(rawPoint.y - firstPoint.y, 2)
                             );
+                            // 动态显示闭合距离
+                            System.out.println("当前闭合距离：" + distance + "/" + gridStep*1.5f);
 // 闭合阈值设为⽹格步⻓的1.5倍
 //                            if (distance < gridStep * 1.5f) {
 //                                linesPreview.add(new Line((float) p.x, (float) p.y, (float)
@@ -684,6 +689,19 @@ public class CoordinateGrid2_3 implements Runnable {
                     System.out.println("距离最近seedpoint：" + optDist);
                     if(optDist< 10){
                         seedPoints.removeLast();
+                    }
+                    // 同步删除对应的保存路径
+                    if (!pointListListSave.isEmpty() && !segmentLineCounts.isEmpty()) {
+                        // 获取最后添加的线段数量
+                        int lastSegmentLines = segmentLineCounts.remove(segmentLineCounts.size() - 1);
+                        pointListListSave.remove(pointListListSave.size() - 1);
+
+                        // 从linesSave中移除对应线段
+                        int from = linesSave.size() - lastSegmentLines;
+                        int to = linesSave.size();
+                        if (from >= 0 && to <= linesSave.size()) {
+                            linesSave.subList(from, to).clear();
+                        }
                     }
                 }
             }
@@ -843,10 +861,14 @@ public class CoordinateGrid2_3 implements Runnable {
     public void addNewPointsPreview(List<Point> points){
         this.pointListListPreview.add(points);
     }
+
+    private List<Integer> segmentLineCounts = new ArrayList<>();
+
     public void addNewPointsSave(List<Point> points) {
 //        this.pointListListSave.add(points);
         if (points != null && !points.isEmpty()) {
             // 生成线段并保存到 linesSave
+            int startLineCount = linesSave.size();
             pointListListSave.add(new ArrayList<>(points)); // 添加点列表副本
             for (int i = 0; i < points.size() - 1; i++) {
                 Point p1 = points.get(i);
@@ -858,7 +880,18 @@ public class CoordinateGrid2_3 implements Runnable {
                 Point first = points.get(0);
                 Point last = points.get(points.size() - 1);
                 linesSave.add(new Line((float)last.x, (float)last.y, (float)first.x, (float)first.y));
+                isPathClosed = true;
+                closedPathIndex = pointListListSave.size() - 1; // 记录闭合路径索引
+                System.out.println("路径闭合成功！"); // 添加成功提示
             }
+//            if (isClosed && points.size() >= 2) {
+//                Point first = points.get(0);
+//                Point last = points.get(points.size() - 1);
+//                linesSave.add(new Line((float)last.x, (float)last.y, (float)first.x, (float)first.y));
+//            }
+            // 记录线段数量
+            int addedLines = linesSave.size() - startLineCount;
+            segmentLineCounts.add(addedLines);
         }
     }
 
