@@ -219,7 +219,10 @@ public class CoordinateGrid2_3 implements Runnable {
                 // Check if seedPoints has elements and getPosition() is valid
                 if (!seedPoints.isEmpty() && getPosition() != null) {
                     Point start = seedPoints.getLast();
-                    Point end = getPosition();
+                    //Point end = getPosition();
+                    Point end = snap((int) getPosition().x, (int) getPosition().y,13);
+                    //seedPoints.getLast() = end;
+
                     pointsList = AStar.Node.convertNodesToPoints(
                             AStar.findPath((int)start.x, (int)start.y, (int)end.x, (int)end.y, ImageProcess.costMatrix)
                     );
@@ -242,6 +245,7 @@ public class CoordinateGrid2_3 implements Runnable {
      * 加载图⽚⽂件
      * @param path 图⽚⽂件路径
      */
+
     private void loadImage(String path) {
         try (MemoryStack stack = stackPush()) {
 // 分配缓冲区存储图⽚尺⼨和通道信息
@@ -359,7 +363,7 @@ public class CoordinateGrid2_3 implements Runnable {
             glEnable(GL_BLEND);
             glBlendFunc(GL_ONE_MINUS_DST_COLOR, GL_ZERO);
 // 计算圆圈半径(考虑缩放)
-            float radius = gridWidth * scaleCircle / (scale * 30.0f);
+            float radius = gridWidth * scaleCircle / (scale * 50.0f);
             glColor3f(1, 1, 1); // 必须设置为⽩⾊
 // 为每个种⼦点绘制圆圈
             for (Point point : seedPoints) {
@@ -386,7 +390,8 @@ public class CoordinateGrid2_3 implements Runnable {
                 glVertex2f(line.x2, line.y2);
             }
             glEnd();
-        }
+            glColor4f(1.0f,1.0f,1.0f,1.0f);       }
+
     }
 //// 绘制线条
 //        if (!lines.isEmpty()) {
@@ -620,14 +625,15 @@ public class CoordinateGrid2_3 implements Runnable {
             }else{
                 if (action == GLFW_PRESS) {
 // 实现标点
-                    Point p = getPosition();
+                    //Point p = getPosition();
+                    Point rawPoint = snap((int) getPosition().x, (int) getPosition().y,13);  // 获取原始网格点
 // 检查是否在坐标系范围内
-                    if (p!=null) {
+                    if (rawPoint!=null) {
 // 添加最近的⽹格点
-                        seedPoints.add(p);
+                        seedPoints.add(rawPoint);
 //此处在测试renewLine()
 // renewLine();
-                        System.out.println(p.x + "N" + p.y);
+                        System.out.println(rawPoint.x + "N" + rawPoint.y);
 
                         double cost = ImageProcess.getCostMatrix((int) getCurrentMousePos().x, (int) getCurrentMousePos().y);  // 正常位置
                         System.out.println("Cost: " + cost);
@@ -636,8 +642,8 @@ public class CoordinateGrid2_3 implements Runnable {
                         if (seedPoints.size() > 2 && !isClosed) {
                             Point firstPoint = seedPoints.get(0);
                             float distance = (float) Math.sqrt(
-                                    pow(p.x - firstPoint.x, 2) +
-                                            pow(p.y - firstPoint.y, 2)
+                                    pow(rawPoint.x - firstPoint.x, 2) +
+                                            pow(rawPoint.y - firstPoint.y, 2)
                             );
 // 闭合阈值设为⽹格步⻓的1.5倍
 //                            if (distance < gridStep * 1.5f) {
@@ -767,7 +773,8 @@ public class CoordinateGrid2_3 implements Runnable {
      * 表示2D点的内部类
      */
     public static class Point {
-        public final double x, y;
+        public double x;
+        public double y;
         public Point(double x, double y) {
             this.x = x;
             this.y = y;
@@ -806,6 +813,30 @@ public class CoordinateGrid2_3 implements Runnable {
         }
         return null;
     }
+
+    public Point snap(int x, int y, int radius) {
+        double minCost = Double.MAX_VALUE;
+        Point snapPoint = new Point(x, y);
+
+        for (int i = -radius; i <= radius; i++) {
+            for (int j = -radius; j <= radius; j++) {
+                int newX = x + i;
+                int newY = y + j;
+
+                if (newX >= 0 && newX < gridWidth && newY >= 0 && newY < gridHeight) {
+                    double cost = ImageProcess.getCostMatrix(newX, newY);
+                    if (cost < minCost) {
+                        minCost = cost;
+                        snapPoint.x = newX;//去掉fianl
+                        snapPoint.y = newY;
+                    }
+                }
+            }
+        }
+        return snapPoint;
+    }
+
+
     /**
      * 更新点集合
      */
