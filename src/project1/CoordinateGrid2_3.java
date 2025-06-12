@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class CoordinateGrid2_3 implements Runnable {
+
     // 状态变量
     private boolean pathCoolingMode= false;
     private boolean snapMode = false;
@@ -109,6 +110,7 @@ public class CoordinateGrid2_3 implements Runnable {
 
 
     public static void main(String[] args) {
+        System.setProperty("jdk.attach.allowAttachSelf", "true");
         new CoordinateGrid2_3().run();
     }
     @Override
@@ -295,7 +297,11 @@ public class CoordinateGrid2_3 implements Runnable {
             }
             // 第二窗口的渲染
             if (imageWindow != NULL) {
+
+                System.out.println(finalTexture);
                 glfwMakeContextCurrent(imageWindow);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
                 renderImageWindow();
                 glfwSwapBuffers(imageWindow);
 
@@ -371,7 +377,6 @@ public class CoordinateGrid2_3 implements Runnable {
         maskTextureID = createTexture(mask, false);
         // 3. 应用掩膜生成最终纹理
         finalTexture = createRGBATexture(finalImage);
-        System.out.println("final");
     }
 
     // 创建OpenGL纹理
@@ -418,7 +423,6 @@ public class CoordinateGrid2_3 implements Runnable {
 
     // 渲染纹理到指定位置
     private void renderTexture(int textureID, float x, float y, float scale) {
-        GL.createCapabilities();
         glEnable(GL_TEXTURE_2D);
         glBindTexture(GL_TEXTURE_2D, textureID);
 
@@ -428,6 +432,7 @@ public class CoordinateGrid2_3 implements Runnable {
         glTexCoord2f(1, 1); glVertex2f(x + scale, y + scale);
         glTexCoord2f(0, 1); glVertex2f(x, y + scale);
         glEnd();
+        System.out.println("why");
     }
     /**
      * 根据二值掩膜裁剪图像
@@ -460,7 +465,7 @@ public class CoordinateGrid2_3 implements Runnable {
         for (int i = 0; i < originalPixels.length; i++) {
             // 掩膜黑色像素（RGB全0）则设置完全透明
             if ((maskPixels[i] & 0x00FFFFFF) == 0) {
-                originalPixels[i] = 0; // 保留RGB，Alpha=0
+                originalPixels[i] = 255; // 保留RGB，Alpha=0
                 System.out.print("processiing");
             }
         }
@@ -523,7 +528,6 @@ public class CoordinateGrid2_3 implements Runnable {
 
 
     private void renderImageWindow() {
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         renderTexture(finalTexture, 0.0f, 0.0f, 0.5f);
     }
