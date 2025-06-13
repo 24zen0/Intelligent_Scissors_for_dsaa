@@ -438,7 +438,6 @@ public class CoordinateGrid2_3 implements Runnable {
 
     // 渲染纹理到指定位置
     private void renderTexture(int textureID, float x, float y, float width, float height) {
-//        y = y - (float) windowHeight /2;
         glEnable(GL_TEXTURE_2D);
         glBindTexture(GL_TEXTURE_2D, textureID);
         glBegin(GL_QUADS);
@@ -542,51 +541,100 @@ public class CoordinateGrid2_3 implements Runnable {
 
 
     private void renderImageWindow() {
-        try (MemoryStack stack = stackPush()) {
-            IntBuffer width = stack.mallocInt(1);
-            IntBuffer height = stack.mallocInt(1);
-            glfwGetWindowSize(imageWindow, width, height);
+        // 获取窗口的帧缓冲尺寸（兼容Retina等高DPI屏幕）
+        int[] winWidth = new int[1];
+        int[] winHeight = new int[1];
+        glfwGetFramebufferSize(imageWindow, winWidth, winHeight);
+        int fbWidth = winWidth[0];
+        int fbHeight = winHeight[0];
 
-            // 计算合适的缩放比例或使用实际尺寸
+        // 设置视口（覆盖整个窗口）
+        glViewport(0, 0, fbWidth, fbHeight);
+
+        // 清屏并填充黑边颜色（例如纯黑）
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        // 计算图片原始宽高比
+        float imageAspect = (float)imageWidth / imageHeight;
+        float windowAspect = (float)fbWidth / fbHeight;
+
+        float renderWidth, renderHeight;
+        float offsetX, offsetY;
+
+        if (imageAspect > windowAspect) {
+            // 图片比窗口更宽 → 以宽度为基准缩放
+            renderWidth = fbWidth;
+            renderHeight = fbWidth / imageAspect;
+            offsetX = 0;
+            offsetY = (fbHeight - renderHeight) / 2;
+        } else {
+            // 图片比窗口更高 → 以高度为基准缩放
+            renderHeight = fbHeight;
+            renderWidth = fbHeight * imageAspect;
+            offsetX = (fbWidth - renderWidth) / 2;
+            offsetY = 0;
+        }
+
+        // 渲染纹理（确保纹理坐标正确）
+        renderTexture(finalTexture, offsetX, offsetY, renderWidth, renderHeight);
+    }
+//    private void renderImageWindow() {
+//        try (MemoryStack stack = stackPush()) {
+//            IntBuffer width = stack.mallocInt(1);
+//            IntBuffer height = stack.mallocInt(1);
+//            glfwGetWindowSize(imageWindow, width, height);
+//
+//            int[] winWidth = new int[1];
+//            int[] winHeight = new int[1];
+//            glfwGetFramebufferSize(imageWindow, winWidth, winHeight);
+//
+//            // 计算缩放比例和偏移
 //            float imageAspect = (float)imageWidth / imageHeight;
-//            float windowAspect = (float)windowWidth / windowHeight;
+//            float windowAspect = (float)winWidth[0] / winHeight[0];
+//
+//            float scale;
+//            float renderWidth, renderHeight;
+//            float offsetX = 0, offsetY = 0;
 //
 //            if (imageAspect > windowAspect) {
-//                // 以宽度为基准缩放
-//                float h = (float) windowWidth / imageWidth;
-//                float w = (float) windowHeight / imageWidth;
-//                float yOffset = (windowHeight - h) / 2;
-//                renderTexture(textureID, 0, yOffset, w, h);
+//                // 图片比窗口更宽 → 以宽度为基准缩放
+//                scale = (float)winWidth[0] / imageWidth;
+//                renderWidth = winWidth[0];
+//                renderHeight = imageHeight * scale;
+//                offsetY = (winHeight[0] - renderHeight) / 2; // 垂直居中
 //            } else {
-//                // 以高度为基准缩放
-//                float h = (float) windowHeight / imageHeight;
-//                float w = (float) windowHeight / imageHeight;
-//                float xOffset = (windowWidth - w) / 2;
-//                renderTexture(textureID, xOffset, 0, w, h);
+//                // 图片比窗口更高 → 以高度为基准缩放
+//                scale = (float)winHeight[0] / imageHeight;
+//                renderHeight = winHeight[0];
+//                renderWidth = imageWidth * scale;
+//                offsetX = (winWidth[0] - renderWidth) / 2; // 水平居中
 //            }
-
-            // 计算缩放和居中
-            float imageAspect = (float)imageWidth / imageHeight;
-            float windowAspect = (float)windowWidth2 / windowHeight2;
-
-            if (imageAspect > windowAspect) {
-                // 以宽度为基准缩放
-                float scale = (float) windowWidth2 / imageWidth;
-                float h = imageHeight * scale;
-                float w = imageWidth * scale;
-                float yOffset = (windowHeight2 - h) / 2;
-                renderTexture(finalTexture, 0, 0, w, h);
-            } else {
-                // 以高度为基准缩放
-                float scale = (float) windowHeight2 / imageHeight;
-                float w = imageWidth * scale;
-                float h = imageHeight * scale;
-                float xOffset = (windowWidth2 - w) / 2;
-                renderTexture(finalTexture, 0, 0, w, h);
-            }
-//            renderTexture(finalTexture, 0, 0, width.get(0), height.get(0));
-        }
-    }
+//
+//            // 渲染纹理（带偏移）
+//            renderTexture(finalTexture, offsetX, offsetY, renderWidth, renderHeight);
+////            // 计算缩放和居中
+////            float imageAspect = (float)imageWidth / imageHeight;
+////            float windowAspect = (float)windowWidth2 / windowHeight2;
+////
+////            if (imageAspect > windowAspect) {
+////                // 以宽度为基准缩放
+////                float scale = (float) windowWidth2 / imageWidth;
+////                float h = imageHeight * scale;
+////                float w = imageWidth * scale;
+////                float yOffset = (windowHeight2 - h) / 2;
+////                renderTexture(finalTexture, 0, 0, w, h);
+////            } else {
+////                // 以高度为基准缩放
+////                float scale = (float) windowHeight2 / imageHeight;
+////                float w = imageWidth * scale;
+////                float h = imageHeight * scale;
+////                float xOffset = (windowWidth2 - w) / 2;
+////                renderTexture(finalTexture, 0, 0, w, h);
+////            }
+//////            renderTexture(finalTexture, 0, 0, width.get(0), height.get(0));
+//        }
+//    }
     /**
      * 渲染时动态调整纹理大小
      * @param textureID 纹理ID
