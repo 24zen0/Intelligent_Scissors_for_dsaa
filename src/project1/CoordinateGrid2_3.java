@@ -69,7 +69,9 @@ public class CoordinateGrid2_3 implements Runnable {
     private static final float DRAG_SENSITIVITY = 1.0f; // 拖动灵敏度
     // 绘制的⼏何元素
     private List<Point> pointsList = new ArrayList<>(); // 点集合
-    private List<List<Point>> pointListListPreview = new ArrayList< >();
+    private List<Point> endList = new ArrayList<>(); // 点集合
+
+    private List<List<Point>> pointListListPreview = new ArrayList< >(); // 包含所有点，包括预览线
     private List<List<Point>> pointListListSave = new ArrayList< >();
 
     private List<Line> linesPreview = new ArrayList<>(); // 线集合
@@ -261,15 +263,15 @@ public class CoordinateGrid2_3 implements Runnable {
                     //Point end = getPosition();
                     Point end = new Point((int) getPosition().x, (int) getPosition().y);
 
-                    if(snapMode){
-                         end = snap((int) getPosition().x, (int) getPosition().y,20);
-                    }else{
-                         end = new Point((int) getPosition().x, (int) getPosition().y);
+                    if (snapMode) {
+                        end = snap((int) getPosition().x, (int) getPosition().y, 20);
+                    } else {
+                        end = new Point((int) getPosition().x, (int) getPosition().y);
                     }
 
 
                     pointsList = AStar.Node.convertNodesToPoints(
-                            AStar.findPath((int)start.x, (int)start.y, (int)end.x, (int)end.y, ImageProcess.costMatrix)
+                            AStar.findPath((int) start.x, (int) start.y, (int) end.x, (int) end.y, ImageProcess.costMatrix)
                     );
                     //添加与pathHistory相关的内容
                     pathHistory.addLast(pointsList);
@@ -294,9 +296,12 @@ public class CoordinateGrid2_3 implements Runnable {
                 //     monitorPathStability(pointsList);
                 //     checkAutoSeedGeneration();
                 // }
-                if(!pathCoolingMode){
-                    processPathCooling(); // Check and save stable paths
+                if (!handMode) {
+                    if (pathCoolingMode) {
+                        processPathCooling(); // Check and save stable paths
+                    }
                 }
+
             }
 
 // 渲染场景
@@ -479,7 +484,6 @@ public class CoordinateGrid2_3 implements Runnable {
             // 掩膜黑色像素（RGB全0）则设置完全透明
             if ((maskPixels[i] & 0x00FFFFFF) == 0) {
                 originalPixels[i] = 255; // 保留RGB，Alpha=0
-                System.out.print("processiing");
             }
         }
 
@@ -949,19 +953,38 @@ public class CoordinateGrid2_3 implements Runnable {
         }
 //enter直接闭合，扣图
         if(key == GLFW_KEY_ENTER && action == GLFW_PRESS) {
-            shouldOpenImageWindow = true;
-//            int size = 0;
-//            for(int i =0;i<pointListListSave.size();i++){
-//                size += pointListListSave.get(i).size();
-//            }
-//            if(size>3){
-//                if(isClosed){
-//                    shouldOpenImageWindow = true;
-//                }else{
-//// 第⼀次，未闭合，将其闭合
-////添加计算路径返回point List的代码
-//                }
-//            }
+            int size = 0;
+            for(int i =0;i<pointListListSave.size();i++){
+                size += pointListListSave.get(i).size();
+            }
+            System.out.println("验证是否可以闭合");
+            if(size>=2){
+                if(isClosed){
+                    shouldOpenImageWindow = true;
+
+                }else{
+// 第⼀次，未闭合，将其闭合
+//添加计算路径返回point List的代码
+                    endList = AStar.Node.convertNodesToPoints(
+                            AStar.findPath((int)seedPoints.getLast().x, (int)seedPoints.getLast().y, (int)seedPoints.getFirst().x, (int)seedPoints.getFirst().y, ImageProcess.costMatrix)
+                    );
+                    System.out.println("计算合并路径完毕");
+                    // 打扫干净latestPath
+                    latestPath.clear();
+                    latestPath.addAll(endList);
+
+                    pointListListSave.add(latestPath);
+                    isClosed = true;
+
+
+                    // 清空预览相关列表，避免重复
+                    pointListListPreview.clear();
+                    linesPreview.clear();
+                    //出图
+                    shouldOpenImageWindow = true;
+                    System.out.println(shouldOpenImageWindow);
+                }
+            }
         }
         if (key == GLFW_KEY_Z && action == GLFW_PRESS && ctrlPressed) {
             if(isClosed){
@@ -1057,15 +1080,15 @@ public class CoordinateGrid2_3 implements Runnable {
                                             pow(rawPoint.y - firstPoint.y, 2)
                             );
                             // 动态显示闭合距离
-                            System.out.println("当前闭合距离：" + distance + "/" + gridStep*1.5f);
-// 闭合阈值设为⽹格步⻓的1.5倍
+                            System.out.println("当前闭合距离：" + distance + "/" + gridStep*3f);
+// 闭合阈值设为⽹格步⻓的3倍
 //                            if (distance < gridStep * 1.5f) {
 //                                linesPreview.add(new Line((float) p.x, (float) p.y, (float)
 //                                        firstPoint.x, (float) firstPoint.y));
 //                                isClosed = true;
 //                            }
                             //新的方法来实现闭合：
-                            if (distance < gridStep * 1.5f) {
+                            if (distance < gridStep * 3f) {
                                 // 闭合路径，确保 latestPath 包含闭合线段
                                 latestPath.add(seedPoints.get(0)); // 将起点加入路径末尾
 
