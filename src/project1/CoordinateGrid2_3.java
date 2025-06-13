@@ -28,10 +28,17 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class CoordinateGrid2_3 implements Runnable {
-    // 添加这些常量到类顶部
-    private static final int STABLE_FRAMES_REQUIRED = 40;  // 需要连续8帧稳定
-    private static final float STABLE_THRESHOLD = 3.0f;  // 3像素内的变动视为稳定
-    private static final float STABLE_PORTION = 0.5f;    // 70%的点需要稳定
+
+    /** 冷却比例 (0 < α < 1) */
+    private static final double COOLING_RATE   = 0.5;
+
+    /** 当像素代价 < 此阈值时，生成新种子 */
+    private static final double COST_THRESHOLD = 0.40;
+
+    private static final int STABLE_FRAMES_REQUIRED = 10;  // 需要连续8帧稳定
+    /** 连续帧稳定所需帧数（可以复用 STABLE_FRAMES_REQUIRED） */
+    private static final int    TIME_THRESHOLD = STABLE_FRAMES_REQUIRED;
+
     // 状态变量
     private boolean pathCoolingMode= false;
     private boolean snapMode = false;
@@ -69,9 +76,8 @@ public class CoordinateGrid2_3 implements Runnable {
     private static final float DRAG_SENSITIVITY = 1.0f; // 拖动灵敏度
     // 绘制的⼏何元素
     private List<Point> pointsList = new ArrayList<>(); // 点集合
-    private List<Point> endList = new ArrayList<>(); // 点集合
-
-    private List<List<Point>> pointListListPreview = new ArrayList< >(); // 包含所有点，包括预览线
+    private List<Point> endList = new ArrayList<>(); // 结束闭合时的点集合
+    private List<List<Point>> pointListListPreview = new ArrayList< >();
     private List<List<Point>> pointListListSave = new ArrayList< >();
 
     private List<Line> linesPreview = new ArrayList<>(); // 线集合
@@ -100,6 +106,13 @@ public class CoordinateGrid2_3 implements Runnable {
     //路径闭合
     private boolean isPathClosed = false;
     private int closedPathIndex = -1;
+    // — Path Cooling 状态追踪 —
+    /** 每个像素在活线中连续出现的帧计数 */
+    private Map<Point,Integer> stabilityTime     = new HashMap<>();
+    /** 每个像素在活线中连续共线（前缀一致）的帧计数 */
+    private Map<Point,Integer> coalescenceCount  = new HashMap<>();
+    /** 保存上一帧的活线路径，用于判断共线 */
+    private List<Point>        previousPoints    = new ArrayList<>();
 
     static List<Point> latestPath;
 //    static List<Point> latestPath1;
@@ -291,18 +304,28 @@ public class CoordinateGrid2_3 implements Runnable {
                 }
 //                renewLine();
                 addNewPointsPreview(pointsList);
-//                addNewPointsSave(latestPath);不需要每次loop都要录入。
-                // if (!pointsList.isEmpty()) {
-                //     monitorPathStability(pointsList);
-                //     checkAutoSeedGeneration();
-                // }
+                // 4.1 更新稳定性（连续出现）和共线计数（前缀一致）
+                for (Point p : pointsList) {
+                    // 连续出现在活线中的帧数 +1
+                    stabilityTime.put(p, stabilityTime.getOrDefault(p, 0) + 1);
+
+                    // 如果上一帧活线也包含此点，则前缀共线 +1
+                    if (previousPoints.contains(p)) {
+                        coalescenceCount.put(p, coalescenceCount.getOrDefault(p, 0) + 1);
+                    }
+                }
+                // 保存本帧路径，供下一次共线判断
+                previousPoints = new ArrayList<>(pointsList);
+
+                // 4.2 调用改造后的冷却检测（将替换原来的 processPathCooling()）
                 if (!handMode) {
                     if (pathCoolingMode) {
                         processPathCooling(); // Check and save stable paths
                     }
                 }
-
             }
+//
+
 
 // 渲染场景
             drawAll();
@@ -484,6 +507,7 @@ public class CoordinateGrid2_3 implements Runnable {
             // 掩膜黑色像素（RGB全0）则设置完全透明
             if ((maskPixels[i] & 0x00FFFFFF) == 0) {
                 originalPixels[i] = 255; // 保留RGB，Alpha=0
+                System.out.print("processiing");
             }
         }
 
@@ -1371,97 +1395,102 @@ public class CoordinateGrid2_3 implements Runnable {
  * Traverse the path history to find stable points across the last STABLE_FRAMES_REQUIRED paths
  * and save the stable segment if all paths agree on the same points.
  */
+//    private void processPathCooling() {
+//        if (pathHistory.size() < STABLE_FRAMES_REQUIRED) return;
+//
+//        List<Point> latestPath = pathHistory.getLast();
+//
+//        // 从路径末尾向前遍历点
+//        for (int index = latestPath.size() - 1; index >= 0; index--) {
+//            Point latestPoint = latestPath.get(index);
+//            boolean isStable = true;
+//
+//            // 检查最近4条历史路径（倒数第2到倒数第STABLE_FRAMES_REQUIRED）
+//            for (int i = 1; i <= STABLE_FRAMES_REQUIRED-1; i++) { // i表示倒数第i条路径（1=倒数第2条）
+//                int historyIndex = pathHistory.size() - 1 - i;
+//
+//                // 检查历史索引是否有效
+//                if (historyIndex < 0 || historyIndex >= pathHistory.size()) {
+//                    isStable = false;
+//                    break;
+//                }
+//
+//    //            List<Point> historyPath = pathHistory.get(historyIndex);
+//
+//                Iterator<List<Point>> it = pathHistory.descendingIterator();
+//                for (int k = 0; k < i; k++) it.next(); // 跳过前 j-1 条
+//                List<Point> historyPath = it.next();
+//
+//                // 检查历史路径是否有足够长度
+//                if (historyPath.size() <= index) {
+//                    isStable = false;
+//                    break;
+//                }
+//                Point historyPoint = historyPath.get(index);
+//
+//                if (!isPointStable(historyPoint, latestPoint, 2)) {
+//                    isStable = false;
+//                    break;
+//                }
+//            }
+//
+//            if (isStable) {
+//                // 保存稳定路径段
+//                List<Point> stableSegment = latestPath.subList(0, index + 1);
+//                addNewPointsSave(stableSegment);
+//
+//                // 更新种子点并清空预览
+//                seedPoints.add(latestPoint);
+////                pointListListPreview.clear();
+//                return;
+//            }
+//        }
+//    }
+    /**
+     * 基于代价冷却 + 时间 & 共线计数检测自动生成新种子。
+     */
     private void processPathCooling() {
-        if (pathHistory.size() < STABLE_FRAMES_REQUIRED) return;
+        // 确保我们已有足够帧的稳定数据
+        if (previousPoints.isEmpty()) return;
 
-        List<Point> latestPath = pathHistory.getLast();
+        // 当前最新一帧的活线路径
+        List<Point> latestPath = previousPoints;
 
-        // 从路径末尾向前遍历点
-        for (int index = latestPath.size() - 1; index >= 0; index--) {
-            Point latestPoint = latestPath.get(index);
-            boolean isStable = true;
+        // 从起点向终点依次检查
+        for (int idx = 0; idx < latestPath.size(); idx++) {
+            Point p = latestPath.get(idx);
 
-            // 检查最近4条历史路径（倒数第2到倒数第STABLE_FRAMES_REQUIRED）
-            for (int i = 1; i <= STABLE_FRAMES_REQUIRED-1; i++) { // i表示倒数第i条路径（1=倒数第2条）
-                int historyIndex = pathHistory.size() - 1 - i;
+            int timeCount = stabilityTime.getOrDefault(p, 0);
+            int coalCount = coalescenceCount.getOrDefault(p, 0);
 
-                // 检查历史索引是否有效
-                if (historyIndex < 0 || historyIndex >= pathHistory.size()) {
-                    isStable = false;
-                    break;
+            // 同时满足稳定 & 共线帧数条件
+            if (timeCount >= TIME_THRESHOLD && coalCount >= TIME_THRESHOLD) {
+                // 取当前像素代价并应用冷却
+                double cost = ImageProcess.costMatrix[(int) p.y][(int) p.x];
+                cost *= COOLING_RATE;
+                ImageProcess.costMatrix[ (int) p.y][(int) p.x] = cost;
+
+                // 如果冷却到阈值以下，则“冻”在这里，生成新种子
+                if (cost < COST_THRESHOLD) {
+                    // 切出从上一种子到此点的稳定段
+                    List<Point> frozenSegment = latestPath.subList(0, idx + 1);
+                    // 保存正式段
+                    addNewPointsSave(frozenSegment);
+                    // 新种子
+                    seedPoints.add(p);
+
+                    // 清除预览 & 历史，为下条段重算
+                    pointListListPreview.clear();
+                    pathHistory.clear();
+                    stabilityTime.clear();
+                    coalescenceCount.clear();
+                    previousPoints.clear();
+
+                    return;
                 }
-
-    //            List<Point> historyPath = pathHistory.get(historyIndex);
-
-                Iterator<List<Point>> it = pathHistory.descendingIterator();
-                for (int k = 0; k < i; k++) it.next(); // 跳过前 j-1 条
-                List<Point> historyPath = it.next();
-
-                // 检查历史路径是否有足够长度
-                if (historyPath.size() <= index) {
-                    isStable = false;
-                    break;
-                }
-                Point historyPoint = historyPath.get(index);
-
-                if (!isPointStable(historyPoint, latestPoint, 2)) {
-                    isStable = false;
-                    break;
-                }
-            }
-
-            if (isStable) {
-                // 保存稳定路径段
-                List<Point> stableSegment = latestPath.subList(0, index + 1);
-                addNewPointsSave(stableSegment);
-
-                // 更新种子点并清空预览
-                seedPoints.add(latestPoint);
-//                pointListListPreview.clear();
-                return;
             }
         }
     }
-
-//private void processPathCooling() {
-//    if (pathHistory.size() < STABLE_FRAMES_REQUIRED) return;
-//
-//    List<Point> latestPath = pathHistory.getLast();
-//    int stablePointCount = 0;
-//    int requiredStablePoints = (int) (latestPath.size() * STABLE_PORTION); // 例如70%的点稳定
-//    // 检查路径稳定性
-//    for (int i = 0; i < latestPath.size(); i++) {
-//        Point currentPoint = latestPath.get(i);
-//        boolean pointStable = true;
-//        // 检查当前点在历史帧中的位置
-//        for (int frame = 1; frame < STABLE_FRAMES_REQUIRED; frame++) {
-//            List<Point> historicalPath = pathHistory.get(pathHistory.size() - 1 - frame);
-//            if (i >= historicalPath.size() || !isPointStable(currentPoint, historicalPath.get(i), STABLE_THRESHOLD)) {
-//                pointStable = false;
-//                break;
-//            }
-//        }
-//
-//        if (pointStable) stablePointCount++;
-////        if (pointStable) {
-////            // 保存稳定路径段
-////            List<Point> stableSegment = latestPath.subList(0, stablePointCount + 1);
-////            addNewPointsSave(stableSegment);
-////
-////            // 更新种子点并清空预览
-////            seedPoints.add(currentPoint);
-////            pointListListPreview.clear();
-////            return;
-////        }
-//        // 当大部分点都稳定时才保存
-//        if (stablePointCount >= requiredStablePoints) {
-//            addNewPointsSave(latestPath);
-//            pointListListPreview.clear();
-//            pathHistory.clear(); // 清空历史路径
-//        }
-//    }
-//
-//}
 
 //old
 //    private boolean isPointStable(Point p1, Point p2, float threshold) {
