@@ -4,6 +4,7 @@ import java.io.IOException;
 
 public class main {
     public static void main(String[] args) {
+//        new CoordinateGrid2_3().run();
         try {
             // 初始化缓存
             ImageProcess.processImageToSobel("/Users/zengyitao/IdeaProjects/Data_Structure_and_Algorithm_Analysis/Intelligent_Scissors_for_dsaa/src/img2.png");

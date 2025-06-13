@@ -2,6 +2,7 @@ package project1;
 import java.util.*;
 
 public class AStar {
+    //in this method, we input the mouse-clicks and cursor current positions as start and end
     public static List<Node> findPath(int startX, int startY, int endX, int endY, double[][] costMatrix) {
         //添加边界检查
         if (startX < 0 || startX >= costMatrix[0].length ||
@@ -16,7 +17,7 @@ public class AStar {
         gScore[startY][startX] = 0;
         open.add(new Node(startX, startY, 0, heuristic(startX, startY, endX, endY), null));
 
-        int[][] dirs = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}, {-1, -1}, {-1, 1}, {1, -1}, {1, 1}};
+        int[][] dirs = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
 
         while (!open.isEmpty()) {
             Node current = open.poll();

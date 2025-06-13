@@ -28,10 +28,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class CoordinateGrid2_3 implements Runnable {
-
+    // 添加这些常量到类顶部
+    private static final int STABLE_FRAMES_REQUIRED = 60;  // 需要连续8帧稳定
+    private static final float STABLE_THRESHOLD = 3.0f;  // 3像素内的变动视为稳定
+    private static final float STABLE_PORTION = 0.5f;    // 70%的点需要稳定
     // 状态变量
     private boolean pathCoolingMode= false;
-    private boolean snapMode = false;
+    private boolean snapMode = true;
     private boolean handMode = false; // ⼿形拖动模式标志
     private boolean isDragging = false; // 是否正在拖动
     private boolean GridMode = false; // 是否显示⽹格
@@ -72,7 +75,6 @@ public class CoordinateGrid2_3 implements Runnable {
     private List<Line> linesPreview = new ArrayList<>(); // 线集合
     private List<Line> linesSave = new ArrayList<>(); // 线集合
 
-
     private List<Point> seedPoints = new ArrayList<>(); // 种⼦点(⽤于路径)
     private boolean isClosed = false; // 路径是否闭合
     private float scaleCircle = 1.0f; // 圆圈缩放⽐例
@@ -104,7 +106,8 @@ public class CoordinateGrid2_3 implements Runnable {
 //    static List<Point> latestPath4;
 
     // 新增状态变量
-    private Deque<List<Point>> pathHistory = new ArrayDeque<>(5); // 保留最近5帧路径
+    private Deque<List<Point>> pathHistory = new ArrayDeque<>(STABLE_FRAMES_REQUIRED); // 保留最近5帧路径
+//    private List<List<Point>> pathHistory = new ArrayList<>(STABLE_FRAMES_REQUIRED);
     // private float stabilityThreshold = 0.02f; // 路径差异阈值
     // private int stableFramesRequired = 3; // 需要连续稳定帧数
     // private int currentStableFrames = 0;
@@ -271,20 +274,27 @@ public class CoordinateGrid2_3 implements Runnable {
                     //添加与pathHistory相关的内容
                     pathHistory.addLast(pointsList);
                     // 保持最多5条路径
-                    while (pathHistory.size() > 5) {
+                    while (pathHistory.size() > STABLE_FRAMES_REQUIRED) {
                         pathHistory.removeFirst();
                     }
+                    // 替换上述代码段中的pathHistory操作.6.12新方法
+//                    pathHistory.add(pointsList);  // 使用add()替代addLast()
+//
+//// 修改队列维护逻辑
+//                    if (pathHistory.size() > STABLE_FRAMES_REQUIRED) {
+//                        pathHistory.remove(0);  // 使用remove(0)替代removeFirst()
+//                    }
                 } else {
                     pointsList = Collections.emptyList(); // Handle empty case
                 }
-                renewLine();
+//                renewLine();
                 addNewPointsPreview(pointsList);
 //                addNewPointsSave(latestPath);不需要每次loop都要录入。
                 // if (!pointsList.isEmpty()) {
                 //     monitorPathStability(pointsList);
                 //     checkAutoSeedGeneration();
                 // }
-                if(pathCoolingMode){
+                if(!pathCoolingMode){
                     processPathCooling(); // Check and save stable paths
                 }
             }
@@ -654,7 +664,7 @@ public class CoordinateGrid2_3 implements Runnable {
             IntBuffer comp = stack.mallocInt(1); // 通道数
 // 加载图⽚(强制4通道RGBA)
             ByteBuffer imageBuffer = stbi_load(path, w, h, comp, 4);
-            originalImage = ImageIO.read(new File(path));;
+            originalImage = ImageIO.read(new File(path));
             if (imageBuffer == null) {
                 System.err.println("Failed to load image: " + stbi_failure_reason());
                 return;
@@ -847,6 +857,7 @@ public class CoordinateGrid2_3 implements Runnable {
                     Point p1 = pointList.get(i);
                     Point p2 = pointList.get(i + 1);
                     this.linesPreview.add(new Line((float) p1.x, (float) p1.y, (float) p2.x, (float) p2.y));
+
                 }
 
             }
@@ -869,10 +880,10 @@ public class CoordinateGrid2_3 implements Runnable {
         }
 // L键加载图⽚
         if (key == GLFW_KEY_L && action == GLFW_PRESS) {
-            loadImage("src/img.png");
+            loadImage("src/frog.png");
         }
         if (key == GLFW_KEY_R && action == GLFW_PRESS) {
-            loadImage("src/img.png");
+            loadImage("src/thanos.png");
         }
 // H键切换⼿形模式
         if (key == GLFW_KEY_H && action == GLFW_PRESS) {
@@ -974,7 +985,7 @@ public class CoordinateGrid2_3 implements Runnable {
 // 实现标点
                     //Point p = getPosition();
                     Point rawPoint = new Point(currentMouseX, currentMouseY);
-                    if(snapMode){
+                    if(!snapMode){
                         rawPoint = snap((int) getPosition().x, (int) getPosition().y,15);  // 获取原始网格点
                     }else{
                         rawPoint = getPosition();
@@ -1155,6 +1166,7 @@ public class CoordinateGrid2_3 implements Runnable {
             this.x = x;
             this.y = y;
         }
+        //用来比较pathcooling的，但是没有用。
         @Override
     public boolean equals(Object obj) {
      if (this == obj) return true;
@@ -1285,11 +1297,11 @@ public class CoordinateGrid2_3 implements Runnable {
         return mask;
     }
 /**
- * Traverse the path history to find stable points across the last 5 paths
+ * Traverse the path history to find stable points across the last STABLE_FRAMES_REQUIRED paths
  * and save the stable segment if all paths agree on the same points.
  */
     private void processPathCooling() {
-        if (pathHistory.size() < 5) return;
+        if (pathHistory.size() < STABLE_FRAMES_REQUIRED) return;
 
         List<Point> latestPath = pathHistory.getLast();
 
@@ -1298,8 +1310,8 @@ public class CoordinateGrid2_3 implements Runnable {
             Point latestPoint = latestPath.get(index);
             boolean isStable = true;
 
-            // 检查最近4条历史路径（倒数第2到倒数第5）
-            for (int i = 1; i <= 4; i++) { // i表示倒数第i条路径（1=倒数第2条）
+            // 检查最近4条历史路径（倒数第2到倒数第STABLE_FRAMES_REQUIRED）
+            for (int i = 1; i <= STABLE_FRAMES_REQUIRED-1; i++) { // i表示倒数第i条路径（1=倒数第2条）
                 int historyIndex = pathHistory.size() - 1 - i;
 
                 // 检查历史索引是否有效
@@ -1308,7 +1320,8 @@ public class CoordinateGrid2_3 implements Runnable {
                     break;
                 }
 
-                //            List<Point> historyPath = pathHistory.get(historyIndex);
+    //            List<Point> historyPath = pathHistory.get(historyIndex);
+
                 Iterator<List<Point>> it = pathHistory.descendingIterator();
                 for (int k = 0; k < i; k++) it.next(); // 跳过前 j-1 条
                 List<Point> historyPath = it.next();
@@ -1320,7 +1333,7 @@ public class CoordinateGrid2_3 implements Runnable {
                 }
                 Point historyPoint = historyPath.get(index);
 
-                if (!isPointStable(historyPoint, latestPoint, 1)) {
+                if (!isPointStable(historyPoint, latestPoint, 2)) {
                     isStable = false;
                     break;
                 }
@@ -1333,13 +1346,64 @@ public class CoordinateGrid2_3 implements Runnable {
 
                 // 更新种子点并清空预览
                 seedPoints.add(latestPoint);
-                pointListListPreview.clear();
+//                pointListListPreview.clear();
                 return;
             }
         }
     }
 
+//private void processPathCooling() {
+//    if (pathHistory.size() < STABLE_FRAMES_REQUIRED) return;
+//
+//    List<Point> latestPath = pathHistory.getLast();
+//    int stablePointCount = 0;
+//    int requiredStablePoints = (int) (latestPath.size() * STABLE_PORTION); // 例如70%的点稳定
+//    // 检查路径稳定性
+//    for (int i = 0; i < latestPath.size(); i++) {
+//        Point currentPoint = latestPath.get(i);
+//        boolean pointStable = true;
+//        // 检查当前点在历史帧中的位置
+//        for (int frame = 1; frame < STABLE_FRAMES_REQUIRED; frame++) {
+//            List<Point> historicalPath = pathHistory.get(pathHistory.size() - 1 - frame);
+//            if (i >= historicalPath.size() || !isPointStable(currentPoint, historicalPath.get(i), STABLE_THRESHOLD)) {
+//                pointStable = false;
+//                break;
+//            }
+//        }
+//
+//        if (pointStable) stablePointCount++;
+////        if (pointStable) {
+////            // 保存稳定路径段
+////            List<Point> stableSegment = latestPath.subList(0, stablePointCount + 1);
+////            addNewPointsSave(stableSegment);
+////
+////            // 更新种子点并清空预览
+////            seedPoints.add(currentPoint);
+////            pointListListPreview.clear();
+////            return;
+////        }
+//        // 当大部分点都稳定时才保存
+//        if (stablePointCount >= requiredStablePoints) {
+//            addNewPointsSave(latestPath);
+//            pointListListPreview.clear();
+//            pathHistory.clear(); // 清空历史路径
+//        }
+//    }
+//
+//}
+
+//old
+//    private boolean isPointStable(Point p1, Point p2, float threshold) {
+//        return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2)) <= threshold;
+//    }
     private boolean isPointStable(Point p1, Point p2, float threshold) {
-        return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2)) <= threshold;
+        // 增加对特殊情况（如起点）的处理
+        if (p1.x == p2.x && p1.y == p2.y) return true; // 完全重合
+
+        double distance = Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
+
+        // 起点要求更严格，中间点可以略宽松
+        boolean isStartPoint = seedPoints.size() == 1;
+        return distance <= (isStartPoint ? threshold/2 : threshold);
     }
 }

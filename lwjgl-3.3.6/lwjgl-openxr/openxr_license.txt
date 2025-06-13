@@ -48,7 +48,7 @@ the per-file data remains authoritative.)
   generated as part of the build process is licensed under the Apache
   License, Version 2.0.
 * For compatibility with external developers working in GPLed projects who
-  have requested it, the main OpenXR headers, XML registry, and loader
+  have requested it, the Main OpenXR headers, XML registry, and loader
   source are licensed under a dual license with the SPDX license identifier
   "`Apache-2.0 OR MIT`" .
   Relevant files include:
@@ -109,7 +109,7 @@ your changes under the umbrella of the Khronos IP policy.
 Q: Can you change the license on your files so they're compatible with my
 license?
 
-A: We are using a dual license license on `xr.xml`, the main API headers,
+A: We are using a dual license license on `xr.xml`, the Main API headers,
 and the loader source files, to make them compatible with GPL-2.0- and
 LGPL-2.0/2.1-licensed projects.
 This replaces earlier approaches of an MIT-like license on the XML and
