@@ -33,9 +33,9 @@ public class CoordinateGrid2_3 implements Runnable {
     private static final double COOLING_RATE   = 0.5;
 
     /** 当像素代价 < 此阈值时，生成新种子 */
-    private static final double COST_THRESHOLD = 0.40;
+    private static final double COST_THRESHOLD = 0.70;
 
-    private static final int STABLE_FRAMES_REQUIRED = 10;  // 需要连续8帧稳定
+    private static final int STABLE_FRAMES_REQUIRED = 20;  // 需要连续8帧稳定
     /** 连续帧稳定所需帧数（可以复用 STABLE_FRAMES_REQUIRED） */
     private static final int    TIME_THRESHOLD = STABLE_FRAMES_REQUIRED;
 
@@ -1140,14 +1140,16 @@ public class CoordinateGrid2_3 implements Runnable {
                 if(action == GLFW_PRESS){
                     Point p = getPosition();
 // 找到最新的seedpoint，然后判断点击范围是否接近
-                    Point prePoint = seedPoints.getLast();
-                    int distance = (int)Math.sqrt(pow(prePoint.x - p.x,2)+pow(prePoint.y
-                            - p.y,2));
-                    float optDist = distance / scale; // 考虑缩放时点击的准确性会下降
-                    System.out.println("距离最近seedpoint：" + optDist);
-                    if(optDist< 10){
-                        seedPoints.removeLast();
-                    }
+//                    Point prePoint = seedPoints.getLast();
+//                    int distance = (int)Math.sqrt(pow(prePoint.x - p.x,2)+pow(prePoint.y
+//                            - p.y,2));
+//                    float optDist = distance / scale; // 考虑缩放时点击的准确性会下降
+//                    System.out.println("距离最近seedpoint：" + optDist);
+//                    if(optDist< 10){
+//                        seedPoints.removeLast();
+//                    }
+                    // 现在改成一旦右键就撤回
+                    seedPoints.removeLast();
                     // 同步删除对应的保存路径
                     if (!pointListListSave.isEmpty() && !segmentLineCounts.isEmpty()) {
                         // 获取最后添加的线段数量
