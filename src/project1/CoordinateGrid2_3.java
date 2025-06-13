@@ -30,14 +30,12 @@ import java.util.List;
 public class CoordinateGrid2_3 implements Runnable {
 
     /** 冷却比例 (0 < α < 1) */
-    private static final double COOLING_RATE   = 0.5;
+    private static final double COOLING_RATE   = 0.1;
 
     /** 当像素代价 < 此阈值时，生成新种子 */
-    private static final double COST_THRESHOLD = 0.70;
+    private static final double COST_THRESHOLD = 0.85;
 
-    private static final int STABLE_FRAMES_REQUIRED = 20;  // 需要连续8帧稳定
-    /** 连续帧稳定所需帧数（可以复用 STABLE_FRAMES_REQUIRED） */
-    private static final int    TIME_THRESHOLD = STABLE_FRAMES_REQUIRED;
+    private static final int    TIME_THRESHOLD = 200;
 
     // 状态变量
     private boolean pathCoolingMode= false;
@@ -119,16 +117,6 @@ public class CoordinateGrid2_3 implements Runnable {
 //    static List<Point> latestPath2;
 //    static List<Point> latestPath3;
 //    static List<Point> latestPath4;
-
-    // 新增状态变量
-    private Deque<List<Point>> pathHistory = new ArrayDeque<>(STABLE_FRAMES_REQUIRED); // 保留最近5帧路径
-//    private List<List<Point>> pathHistory = new ArrayList<>(STABLE_FRAMES_REQUIRED);
-    // private float stabilityThreshold = 0.02f; // 路径差异阈值
-    // private int stableFramesRequired = 3; // 需要连续稳定帧数
-    // private int currentStableFrames = 0;
-
-
-
 
     public static void main(String[] args) {
         System.setProperty("jdk.attach.allowAttachSelf", "true");
@@ -286,23 +274,9 @@ public class CoordinateGrid2_3 implements Runnable {
                     pointsList = AStar.Node.convertNodesToPoints(
                             AStar.findPath((int) start.x, (int) start.y, (int) end.x, (int) end.y, ImageProcess.costMatrix)
                     );
-                    //添加与pathHistory相关的内容
-                    pathHistory.addLast(pointsList);
-                    // 保持最多5条路径
-                    while (pathHistory.size() > STABLE_FRAMES_REQUIRED) {
-                        pathHistory.removeFirst();
-                    }
-                    // 替换上述代码段中的pathHistory操作.6.12新方法
-//                    pathHistory.add(pointsList);  // 使用add()替代addLast()
-//
-//// 修改队列维护逻辑
-//                    if (pathHistory.size() > STABLE_FRAMES_REQUIRED) {
-//                        pathHistory.remove(0);  // 使用remove(0)替代removeFirst()
-//                    }
                 } else {
                     pointsList = Collections.emptyList(); // Handle empty case
                 }
-//                renewLine();
                 addNewPointsPreview(pointsList);
                 // 4.1 更新稳定性（连续出现）和共线计数（前缀一致）
                 for (Point p : pointsList) {
@@ -324,9 +298,6 @@ public class CoordinateGrid2_3 implements Runnable {
                     }
                 }
             }
-//
-
-
 // 渲染场景
             drawAll();
 
@@ -592,13 +563,13 @@ public class CoordinateGrid2_3 implements Runnable {
 
         if (imageAspect > windowAspect) {
             // 图片比窗口更宽 → 以宽度为基准缩放
-            renderWidth = fbWidth;
+            renderWidth = fbWidth/ imageAspect;
             renderHeight = fbWidth / imageAspect;
             offsetX = 0;
             offsetY = (fbHeight - renderHeight) / 2;
         } else {
             // 图片比窗口更高 → 以高度为基准缩放
-            renderHeight = fbHeight;
+            renderHeight = fbHeight* imageAspect;
             renderWidth = fbHeight * imageAspect;
             offsetX = (fbWidth - renderWidth) / 2;
             offsetY = 0;
@@ -1393,61 +1364,7 @@ public class CoordinateGrid2_3 implements Runnable {
         g2d.dispose();
         return mask;
     }
-/**
- * Traverse the path history to find stable points across the last STABLE_FRAMES_REQUIRED paths
- * and save the stable segment if all paths agree on the same points.
- */
-//    private void processPathCooling() {
-//        if (pathHistory.size() < STABLE_FRAMES_REQUIRED) return;
-//
-//        List<Point> latestPath = pathHistory.getLast();
-//
-//        // 从路径末尾向前遍历点
-//        for (int index = latestPath.size() - 1; index >= 0; index--) {
-//            Point latestPoint = latestPath.get(index);
-//            boolean isStable = true;
-//
-//            // 检查最近4条历史路径（倒数第2到倒数第STABLE_FRAMES_REQUIRED）
-//            for (int i = 1; i <= STABLE_FRAMES_REQUIRED-1; i++) { // i表示倒数第i条路径（1=倒数第2条）
-//                int historyIndex = pathHistory.size() - 1 - i;
-//
-//                // 检查历史索引是否有效
-//                if (historyIndex < 0 || historyIndex >= pathHistory.size()) {
-//                    isStable = false;
-//                    break;
-//                }
-//
-//    //            List<Point> historyPath = pathHistory.get(historyIndex);
-//
-//                Iterator<List<Point>> it = pathHistory.descendingIterator();
-//                for (int k = 0; k < i; k++) it.next(); // 跳过前 j-1 条
-//                List<Point> historyPath = it.next();
-//
-//                // 检查历史路径是否有足够长度
-//                if (historyPath.size() <= index) {
-//                    isStable = false;
-//                    break;
-//                }
-//                Point historyPoint = historyPath.get(index);
-//
-//                if (!isPointStable(historyPoint, latestPoint, 2)) {
-//                    isStable = false;
-//                    break;
-//                }
-//            }
-//
-//            if (isStable) {
-//                // 保存稳定路径段
-//                List<Point> stableSegment = latestPath.subList(0, index + 1);
-//                addNewPointsSave(stableSegment);
-//
-//                // 更新种子点并清空预览
-//                seedPoints.add(latestPoint);
-////                pointListListPreview.clear();
-//                return;
-//            }
-//        }
-//    }
+
     /**
      * 基于代价冷却 + 时间 & 共线计数检测自动生成新种子。
      */
@@ -1483,7 +1400,6 @@ public class CoordinateGrid2_3 implements Runnable {
 
                     // 清除预览 & 历史，为下条段重算
                     pointListListPreview.clear();
-                    pathHistory.clear();
                     stabilityTime.clear();
                     coalescenceCount.clear();
                     previousPoints.clear();
