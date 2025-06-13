@@ -40,7 +40,10 @@ public class CoordinateGrid2_3 implements Runnable {
     // 窗⼝和坐标系相关变量
     private long window; // GLFW窗⼝句柄
     private static long imageWindow = NULL; // 第二窗口
-    private int windowWidth, windowHeight; // 窗⼝宽⾼
+    private int windowWidth, windowHeight; // 第一窗⼝宽⾼
+    private final int windowWidth2=600;
+    private final int windowHeight2=600; // 第一窗⼝宽⾼
+
     private final int gridStep = 1; // ⽹格步⻓
     // ⽹格尺⼨(会根据加载的图⽚⾃动调整)
     private int gridWidth = 10; // 默认⽹格宽度
@@ -326,7 +329,7 @@ public class CoordinateGrid2_3 implements Runnable {
         glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
         // 创建图片窗口（共享主窗口的上下文）
-        imageWindow = glfwCreateWindow(600, 400, "图片展示窗口", NULL, window);
+        imageWindow = glfwCreateWindow(windowWidth2, windowHeight2, "图片展示窗口", NULL, window);
         if (imageWindow == NULL) {
             throw new RuntimeException("Failed to create the image window");
         }
@@ -425,6 +428,7 @@ public class CoordinateGrid2_3 implements Runnable {
 
     // 渲染纹理到指定位置
     private void renderTexture(int textureID, float x, float y, float width, float height) {
+//        y = y - (float) windowHeight /2;
         glEnable(GL_TEXTURE_2D);
         glBindTexture(GL_TEXTURE_2D, textureID);
         glBegin(GL_QUADS);
@@ -534,23 +538,43 @@ public class CoordinateGrid2_3 implements Runnable {
             glfwGetWindowSize(imageWindow, width, height);
 
             // 计算合适的缩放比例或使用实际尺寸
+//            float imageAspect = (float)imageWidth / imageHeight;
+//            float windowAspect = (float)windowWidth / windowHeight;
+//
+//            if (imageAspect > windowAspect) {
+//                // 以宽度为基准缩放
+//                float h = (float) windowWidth / imageWidth;
+//                float w = (float) windowHeight / imageWidth;
+//                float yOffset = (windowHeight - h) / 2;
+//                renderTexture(textureID, 0, yOffset, w, h);
+//            } else {
+//                // 以高度为基准缩放
+//                float h = (float) windowHeight / imageHeight;
+//                float w = (float) windowHeight / imageHeight;
+//                float xOffset = (windowWidth - w) / 2;
+//                renderTexture(textureID, xOffset, 0, w, h);
+//            }
+
+            // 计算缩放和居中
             float imageAspect = (float)imageWidth / imageHeight;
-            float windowAspect = (float)windowWidth / windowHeight;
+            float windowAspect = (float)windowWidth2 / windowHeight2;
 
             if (imageAspect > windowAspect) {
                 // 以宽度为基准缩放
-                float h = (float) windowWidth / imageWidth;
-                float w = (float) windowHeight / imageWidth;
-                float yOffset = (windowHeight - h) / 2;
-                renderTexture(textureID, 0, yOffset, windowWidth, h);
+                float scale = (float) windowWidth2 / imageWidth;
+                float h = imageHeight * scale;
+                float w = imageWidth * scale;
+                float yOffset = (windowHeight2 - h) / 2;
+                renderTexture(finalTexture, 0, 0, w, h);
             } else {
                 // 以高度为基准缩放
-                float h = (float) windowHeight / imageHeight;
-                float w = (float) windowHeight / imageHeight;
-                float xOffset = (windowWidth - w) / 2;
-                renderTexture(textureID, xOffset, 0, w, windowHeight);
+                float scale = (float) windowHeight2 / imageHeight;
+                float w = imageWidth * scale;
+                float h = imageHeight * scale;
+                float xOffset = (windowWidth2 - w) / 2;
+                renderTexture(finalTexture, 0, 0, w, h);
             }
-            renderTexture(finalTexture, 0, 0, width.get(0), height.get(0));
+//            renderTexture(finalTexture, 0, 0, width.get(0), height.get(0));
         }
     }
     /**
