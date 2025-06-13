@@ -29,12 +29,12 @@ import java.util.List;
 
 public class CoordinateGrid2_3 implements Runnable {
     // 添加这些常量到类顶部
-    private static final int STABLE_FRAMES_REQUIRED = 60;  // 需要连续8帧稳定
+    private static final int STABLE_FRAMES_REQUIRED = 40;  // 需要连续8帧稳定
     private static final float STABLE_THRESHOLD = 3.0f;  // 3像素内的变动视为稳定
     private static final float STABLE_PORTION = 0.5f;    // 70%的点需要稳定
     // 状态变量
     private boolean pathCoolingMode= false;
-    private boolean snapMode = true;
+    private boolean snapMode = false;
     private boolean handMode = false; // ⼿形拖动模式标志
     private boolean isDragging = false; // 是否正在拖动
     private boolean GridMode = false; // 是否显示⽹格
@@ -262,7 +262,7 @@ public class CoordinateGrid2_3 implements Runnable {
                     Point end = new Point((int) getPosition().x, (int) getPosition().y);
 
                     if(snapMode){
-                         end = snap((int) getPosition().x, (int) getPosition().y,15);
+                         end = snap((int) getPosition().x, (int) getPosition().y,20);
                     }else{
                          end = new Point((int) getPosition().x, (int) getPosition().y);
                     }
@@ -1033,8 +1033,8 @@ public class CoordinateGrid2_3 implements Runnable {
 // 实现标点
                     //Point p = getPosition();
                     Point rawPoint = new Point(currentMouseX, currentMouseY);
-                    if(!snapMode){
-                        rawPoint = snap((int) getPosition().x, (int) getPosition().y,15);  // 获取原始网格点
+                    if(snapMode){
+                        rawPoint = snap((int) getPosition().x, (int) getPosition().y,20);  // 获取原始网格点
                     }else{
                         rawPoint = getPosition();
                     }
