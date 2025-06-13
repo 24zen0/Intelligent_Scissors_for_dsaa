@@ -377,6 +377,8 @@ public class CoordinateGrid2_3 implements Runnable {
         maskTextureID = createTexture(mask, false);
         // 3. 应用掩膜生成最终纹理
         finalTexture = createRGBATexture(finalImage);
+        // 测试，为验证finaltexture是否正确传入，先将其赋值成其他
+
     }
 
     // 创建OpenGL纹理
@@ -422,17 +424,15 @@ public class CoordinateGrid2_3 implements Runnable {
     }
 
     // 渲染纹理到指定位置
-    private void renderTexture(int textureID, float x, float y, float scale) {
+    private void renderTexture(int textureID, float x, float y, float width, float height) {
         glEnable(GL_TEXTURE_2D);
         glBindTexture(GL_TEXTURE_2D, textureID);
-
         glBegin(GL_QUADS);
+        glTexCoord2f(0, 1); glVertex2f(x, y +height);
+        glTexCoord2f(1, 1); glVertex2f(x + width, y +height);
+        glTexCoord2f(1, 0); glVertex2f(x +width, y);
         glTexCoord2f(0, 0); glVertex2f(x, y);
-        glTexCoord2f(1, 0); glVertex2f(x + scale, y);
-        glTexCoord2f(1, 1); glVertex2f(x + scale, y + scale);
-        glTexCoord2f(0, 1); glVertex2f(x, y + scale);
         glEnd();
-        System.out.println("why");
     }
     /**
      * 根据二值掩膜裁剪图像
@@ -528,8 +528,30 @@ public class CoordinateGrid2_3 implements Runnable {
 
 
     private void renderImageWindow() {
+        try (MemoryStack stack = stackPush()) {
+            IntBuffer width = stack.mallocInt(1);
+            IntBuffer height = stack.mallocInt(1);
+            glfwGetWindowSize(imageWindow, width, height);
 
-        renderTexture(finalTexture, 0.0f, 0.0f, 0.5f);
+            // 计算合适的缩放比例或使用实际尺寸
+            float imageAspect = (float)imageWidth / imageHeight;
+            float windowAspect = (float)windowWidth / windowHeight;
+
+            if (imageAspect > windowAspect) {
+                // 以宽度为基准缩放
+                float h = (float) windowWidth / imageWidth;
+                float w = (float) windowHeight / imageWidth;
+                float yOffset = (windowHeight - h) / 2;
+                renderTexture(textureID, 0, yOffset, windowWidth, h);
+            } else {
+                // 以高度为基准缩放
+                float h = (float) windowHeight / imageHeight;
+                float w = (float) windowHeight / imageHeight;
+                float xOffset = (windowWidth - w) / 2;
+                renderTexture(textureID, xOffset, 0, w, windowHeight);
+            }
+            renderTexture(finalTexture, 0, 0, width.get(0), height.get(0));
+        }
     }
     /**
      * 渲染时动态调整纹理大小
@@ -539,19 +561,19 @@ public class CoordinateGrid2_3 implements Runnable {
      * @param width 渲染宽度
      * @param height 渲染高度
      */
-    public static void renderTextureScaled(int textureID,
-                                           float x, float y,
-                                           float width, float height) {
-        glEnable(GL_TEXTURE_2D);
-        glBindTexture(GL_TEXTURE_2D, textureID);
-
-        glBegin(GL_QUADS);
-        glTexCoord2f(0, 0); glVertex2f(x, y);
-        glTexCoord2f(1, 0); glVertex2f(x + width, y);
-        glTexCoord2f(1, 1); glVertex2f(x + width, y + height);
-        glTexCoord2f(0, 1); glVertex2f(x, y + height);
-        glEnd();
-    }
+//    public static void renderTextureScaled(int textureID,
+//                                           float x, float y,
+//                                           float width, float height) {
+//        glEnable(GL_TEXTURE_2D);
+//        glBindTexture(GL_TEXTURE_2D, textureID);
+//
+//        glBegin(GL_QUADS);
+//        glTexCoord2f(0, 0); glVertex2f(x, y);
+//        glTexCoord2f(1, 0); glVertex2f(x + width, y);
+//        glTexCoord2f(1, 1); glVertex2f(x + width, y + height);
+//        glTexCoord2f(0, 1); glVertex2f(x, y + height);
+//        glEnd();
+//    }
 
     /**
      * 通用RGBA纹理生成方法（严格保持原始像素数据）
